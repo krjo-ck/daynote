@@ -1,15 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Params, useLoaderData } from 'react-router-dom';
-import BottomNavigation from '@mui/material/BottomNavigation';
-import BottomNavigationAction from '@mui/material/BottomNavigationAction';
-import ArrowBackIosIcon from '@mui/icons-material/ArrowBackIosNewRounded';
-import TodayIcon from '@mui/icons-material/TodayRounded';
-import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIosRounded';
-import Paper from '@mui/material/Paper';
-import Typography from '@mui/material/Typography';
-import Stack from '@mui/material/Stack';
-import Divider from '@mui/material/Divider';
-import TextField from '@mui/material/TextField';
+import { BottomNavigation, BottomNavigationAction, Paper, Typography, Stack, Divider, TextField } from '@mui/material';
 import { DaynotedataClient, init } from '../database';
 import { note } from '../database/notes';
 import { anniversary } from '../database/anniversaries';
@@ -44,7 +35,6 @@ const Day: React.FC = () => {
     objectFit: 'contain',
     compressInitial: null,
   };
-  const initialImage = '';
 
   useEffect(() => {
     init()
@@ -86,35 +76,49 @@ const Day: React.FC = () => {
     (value: string) => {
       if (database) {
         database.notes
-          .put({ date: dateWithoutTime.valueOf(), note: value, photo: '' })
+          .put({ date: dateWithoutTime.valueOf(), note: value, photo: noteData.photo })
           .then(a => setNoteData(a))
           .catch(e => {
             console.error(e);
-            setNoteData({ date: dateWithoutTime.valueOf(), note: '', photo: '' });
+            setNoteData({ date: dateWithoutTime.valueOf(), note: '', photo: noteData.photo });
           });
       }
     },
-    [database, dateWithoutTime],
+    [database, dateWithoutTime, noteData.photo],
+  );
+
+  const handlePhotoChange = useCallback(
+    (value: string | null) => {
+      if (database) {
+        database.notes
+          .put({ date: dateWithoutTime.valueOf(), note: noteData.note, photo: value || '' })
+          .then(a => setNoteData(a))
+          .catch(e => {
+            console.error(e);
+            setNoteData({ date: dateWithoutTime.valueOf(), note: noteData.note, photo: '' });
+          });
+      }
+    },
+    [database, dateWithoutTime, noteData.note],
   );
 
   return (
-    <Stack alignItems="center" height="100%" width="100%">
+    <Stack sx={{ alignItems: 'center', height: '100%', width: '100%' }}>
       <Paper sx={{ width: '100%', borderRadius: 0 }} elevation={0}>
-        <Stack direction="row" alignItems="center" width="100%">
+        <Stack direction="row" sx={{ alignItems: 'center', width: '100%' }}>
           <BottomNavigationAction
             label={currentWeek}
-            icon={<ArrowBackIosIcon />}
             href={`/week/${currentWeek}`}
             showLabel
             style={{ maxWidth: '80px' }}
           />
-          <Typography variant="h6" margin={1} paddingRight={'80px'} flex={'1 1 auto'} textAlign="center">
+          <Typography variant="h6" sx={{ m: 1, pr: '80px', flex: '1 1 auto', textAlign: 'center' }}>
             {date.toLocaleDateString()}
           </Typography>
         </Stack>
       </Paper>
       <Divider orientation="horizontal" variant="fullWidth" sx={{ width: '100%' }} />
-      <Stack alignItems="center" height="100%" width="100%" padding={1}>
+      <Stack sx={{ alignItems: 'center', height: '100%', width: '100%', p: 1 }}>
         <TextField
           id="anniversary"
           aria-label="anniversary"
@@ -137,22 +141,14 @@ const Day: React.FC = () => {
           minRows={3}
           onChange={e => handleNoteChange(e.target.value)}
         />
-        <ImagePicker config={config} imageSrcProp={initialImage} />
+        <ImagePicker config={config} imageSrcProp={noteData.photo} imageChanged={handlePhotoChange} />
       </Stack>
       <Divider orientation="horizontal" variant="fullWidth" sx={{ width: '100%' }} />
       <Paper sx={{ width: '100%', borderRadius: 0 }} elevation={0}>
         <BottomNavigation showLabels>
-          <BottomNavigationAction
-            label={new Date(previousDay).toLocaleDateString()}
-            icon={<ArrowBackIosIcon />}
-            href={`/day/${previousDay}`}
-          />
-          <BottomNavigationAction label="Today" icon={<TodayIcon />} href={`/day/${today.valueOf()}`} />
-          <BottomNavigationAction
-            label={new Date(nextDay).toLocaleDateString()}
-            icon={<ArrowForwardIosIcon />}
-            href={`/day/${nextDay}`}
-          />
+          <BottomNavigationAction label={new Date(previousDay).toLocaleDateString()} href={`/day/${previousDay}`} />
+          <BottomNavigationAction label="Today" href={`/day/${today.valueOf()}`} />
+          <BottomNavigationAction label={new Date(nextDay).toLocaleDateString()} href={`/day/${nextDay}`} />
         </BottomNavigation>
       </Paper>
     </Stack>

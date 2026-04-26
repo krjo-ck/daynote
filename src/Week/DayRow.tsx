@@ -1,9 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import Typography from '@mui/material/Typography';
-import Box from '@mui/material/Box';
-import Stack from '@mui/material/Stack';
-import Circle from '@mui/icons-material/Circle';
+import { Typography, Box, Stack } from '@mui/material';
 import { note } from '../database/notes';
 import { anniversary } from '../database/anniversaries';
 import { DaynotedataClient, init } from '../database';
@@ -41,17 +38,29 @@ const DayRow: React.FC<DayRowProps> = ({ date }: DayRowProps) => {
   }, [database, date, dateWithoutTime]);
 
   return (
-    <Box width="100%">
+    <Box sx={{ width: '100%' }}>
       <Link to={`/day/${dateWithoutTime.valueOf()}`} style={{ textDecoration: 'none' }}>
         <Typography variant="body1">{date.toLocaleDateString()}</Typography>
-        <Stack direction="row" alignItems="center" gap={1}>
-          <Stack direction="column" alignContent="space-around" minWidth="20px" minHeight="40px">
-            {date.toLocaleDateString() === today.toLocaleDateString() && <Circle color="primary" fontSize="small" />}
-            {anniversaryData.note && <Circle color="secondary" fontSize="small" />}
+        <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
+          <Stack direction="column" sx={{ alignContent: 'space-around', minWidth: '20px', minHeight: '40px' }}>
+            {date.toLocaleDateString() === today.toLocaleDateString() && (
+              <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: 'primary.main' }} />
+            )}
+            {anniversaryData.note && (
+              <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: 'secondary.main' }} />
+            )}
           </Stack>
-          <Typography variant="body2" fontStyle="italic">
+          <Typography variant="body2" sx={{ fontStyle: 'italic' }}>
             {anniversaryData.note}
           </Typography>
+          {noteData.photo && (
+            <Box
+              component="img"
+              src={noteData.photo}
+              alt={`Note for ${date.toLocaleDateString()}`}
+              sx={{ width: 40, height: 40, borderRadius: 1, objectFit: 'cover', flexShrink: 0 }}
+            />
+          )}
           <Typography variant="body2">{noteData.note}</Typography>
         </Stack>
       </Link>

@@ -1,47 +1,25 @@
 {
   "name": "daynote",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
+  "type": "module",
   "dependencies": {
-    "@emotion/react": "^11.11.3",
-    "@emotion/styled": "^11.11.0",
-    "@fontsource/roboto": "^5.0.8",
-    "@mui/icons-material": "^5.15.5",
-    "@mui/material": "^5.15.5",
-    "@testing-library/jest-dom": "^5.17.0",
-    "@testing-library/react": "^13.4.0",
-    "@testing-library/user-event": "^13.5.0",
-    "@types/jest": "^27.5.2",
-    "@types/node": "^17.0.45",
-    "@types/react": "^18.2.46",
-    "@types/react-dom": "^18.2.18",
-    "@types/react-router-dom": "^5.3.3",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-router-dom": "^6.21.1",
-    "react-scripts": "5.0.1",
-    "serve": "^14.2.4",
-    "typescript": "^4.9.5",
-    "web-vitals": "^2.1.4",
-    "workbox-background-sync": "^6.6.0",
-    "workbox-broadcast-update": "^6.6.0",
-    "workbox-cacheable-response": "^6.6.0",
-    "workbox-core": "^6.6.0",
-    "workbox-expiration": "^6.6.0",
-    "workbox-google-analytics": "^6.6.0",
-    "workbox-navigation-preload": "^6.6.0",
-    "workbox-precaching": "^6.6.0",
-    "workbox-range-requests": "^6.6.0",
-    "workbox-routing": "^6.6.0",
-    "workbox-strategies": "^6.6.0",
-    "workbox-streams": "^6.6.0"
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@fontsource/roboto": "^5.2.10",
+    "@mui/icons-material": "^9.0.0",
+    "@mui/material": "^9.0.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "react-router-dom": "^6.21.1"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "start:prod": "serve -s build",
-    "build": "react-scripts build",
-    "test": "react-scripts test --passWithNoTests",
-    "eject": "react-scripts eject"
+    "dev": "vite",
+    "start": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview"
   },
   "prettier": {
     "singleQuote": true,
@@ -50,25 +28,13 @@
     "trailingComma": "all",
     "arrowParens": "avoid"
   },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
-  },
   "devDependencies": {
+    "@babel/core": "^7.29.0",
+    "@rolldown/plugin-babel": "^0.2.3",
+    "@types/babel__core": "^7.20.5",
+    "@types/node": "^24.12.2",
+    "@vitejs/plugin-react": "^6.0.1",
+    "babel-plugin-react-compiler": "^1.0.0",
     "eslint": "^8.56.0",
     "eslint-import-resolver-typescript": "^3.6.1",
     "eslint-import-resolver-webpack": "^0.13.8",
@@ -80,6 +46,8 @@
     "eslint-plugin-promise": "^6.1.1",
     "eslint-plugin-react": "^7.33.2",
     "eslint-plugin-react-hooks": "^4.6.0",
-    "prettier": "^3.1.1"
+    "prettier": "^3.1.1",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.10"
   }
 }
