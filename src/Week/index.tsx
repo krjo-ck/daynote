@@ -1,14 +1,6 @@
 import React, { useMemo } from 'react';
 import { Params, useLoaderData } from 'react-router-dom';
-import BottomNavigation from '@mui/material/BottomNavigation';
-import BottomNavigationAction from '@mui/material/BottomNavigationAction';
-import ArrowBackIosIcon from '@mui/icons-material/ArrowBackIosNewRounded';
-import TodayIcon from '@mui/icons-material/TodayRounded';
-import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIosRounded';
-import Paper from '@mui/material/Paper';
-import Typography from '@mui/material/Typography';
-import Stack from '@mui/material/Stack';
-import Divider from '@mui/material/Divider';
+import { BottomNavigation, BottomNavigationAction, Paper, Typography, Stack, Divider } from '@mui/material';
 import { getLastWeekNumberOfYear, getWeekNumber, getWeekDates } from './DateExtensions';
 import DayRow from './DayRow';
 
@@ -64,9 +56,9 @@ const Week: React.FC = () => {
       <Divider orientation="horizontal" variant="fullWidth" sx={{ width: '100%' }} />
       <Paper sx={{ width: '100%', borderRadius: 0 }} elevation={0}>
         <BottomNavigation showLabels>
-          <BottomNavigationAction label={previousWeek} icon={<ArrowBackIosIcon />} href={`/week/${previousWeek}`} />
-          <BottomNavigationAction label="Today" icon={<TodayIcon />} href={`/week/${today}`} />
-          <BottomNavigationAction label={nextWeek} icon={<ArrowForwardIosIcon />} href={`/week/${nextWeek}`} />
+          <BottomNavigationAction label={previousWeek} href={`/week/${previousWeek}`} />
+          <BottomNavigationAction label="Today" href={`/week/${today}`} />
+          <BottomNavigationAction label={nextWeek} href={`/week/${nextWeek}`} />
         </BottomNavigation>
       </Paper>
     </Stack>
