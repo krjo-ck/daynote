@@ -89,22 +89,22 @@ const Day: React.FC = () => {
   );
 
   return (
-    <Stack alignItems="center" height="100%" width="100%">
+    <Stack sx={{ alignItems: 'center', height: '100%', width: '100%' }}>
       <Paper sx={{ width: '100%', borderRadius: 0 }} elevation={0}>
-        <Stack direction="row" alignItems="center" width="100%">
+        <Stack direction="row" sx={{ alignItems: 'center', width: '100%' }}>
           <BottomNavigationAction
             label={currentWeek}
             href={`/week/${currentWeek}`}
             showLabel
             style={{ maxWidth: '80px' }}
           />
-          <Typography variant="h6" margin={1} paddingRight={'80px'} flex={'1 1 auto'} textAlign="center">
+          <Typography variant="h6" sx={{ m: 1, pr: '80px', flex: '1 1 auto', textAlign: 'center' }}>
             {date.toLocaleDateString()}
           </Typography>
         </Stack>
       </Paper>
       <Divider orientation="horizontal" variant="fullWidth" sx={{ width: '100%' }} />
-      <Stack alignItems="center" height="100%" width="100%" padding={1}>
+      <Stack sx={{ alignItems: 'center', height: '100%', width: '100%', p: 1 }}>
         <TextField
           id="anniversary"
           aria-label="anniversary"

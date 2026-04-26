@@ -38,17 +38,19 @@ const DayRow: React.FC<DayRowProps> = ({ date }: DayRowProps) => {
   }, [database, date, dateWithoutTime]);
 
   return (
-    <Box width="100%">
+    <Box sx={{ width: '100%' }}>
       <Link to={`/day/${dateWithoutTime.valueOf()}`} style={{ textDecoration: 'none' }}>
         <Typography variant="body1">{date.toLocaleDateString()}</Typography>
-        <Stack direction="row" alignItems="center" gap={1}>
-          <Stack direction="column" alignContent="space-around" minWidth="20px" minHeight="40px">
+        <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
+          <Stack direction="column" sx={{ alignContent: 'space-around', minWidth: '20px', minHeight: '40px' }}>
             {date.toLocaleDateString() === today.toLocaleDateString() && (
-              <Box width={12} height={12} borderRadius="50%" bgcolor="primary.main" />
+              <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: 'primary.main' }} />
             )}
-            {anniversaryData.note && <Box width={12} height={12} borderRadius="50%" bgcolor="secondary.main" />}
+            {anniversaryData.note && (
+              <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: 'secondary.main' }} />
+            )}
           </Stack>
-          <Typography variant="body2" fontStyle="italic">
+          <Typography variant="body2" sx={{ fontStyle: 'italic' }}>
             {anniversaryData.note}
           </Typography>
           <Typography variant="body2">{noteData.note}</Typography>

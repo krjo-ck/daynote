@@ -35,16 +35,16 @@ const Week: React.FC = () => {
   }, [weekNo, year]);
 
   return (
-    <Stack alignItems="center" height="100%" width="100%">
+    <Stack sx={{ alignItems: 'center', height: '100%', width: '100%' }}>
       <Paper sx={{ width: '100%', borderRadius: 0 }} elevation={0}>
-        <Stack alignItems="center" width="100%">
-          <Typography variant="h6" margin={1}>
+        <Stack sx={{ alignItems: 'center', width: '100%' }}>
+          <Typography variant="h6" sx={{ m: 1 }}>
             {month} {week}
           </Typography>
         </Stack>
       </Paper>
       <Divider orientation="horizontal" variant="fullWidth" sx={{ width: '100%' }} />
-      <Stack alignItems="center" justifyContent="space-evenly" height="100%">
+      <Stack sx={{ alignItems: 'center', justifyContent: 'space-evenly', height: '100%' }}>
         <DayRow key="monday" date={weekDates[0]} />
         <DayRow key="tuesday" date={weekDates[1]} />
         <DayRow key="wendesday" date={weekDates[2]} />
