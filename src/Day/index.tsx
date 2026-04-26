@@ -35,7 +35,6 @@ const Day: React.FC = () => {
     objectFit: 'contain',
     compressInitial: null,
   };
-  const initialImage = '';
 
   useEffect(() => {
     init()
@@ -77,15 +76,30 @@ const Day: React.FC = () => {
     (value: string) => {
       if (database) {
         database.notes
-          .put({ date: dateWithoutTime.valueOf(), note: value, photo: '' })
+          .put({ date: dateWithoutTime.valueOf(), note: value, photo: noteData.photo })
           .then(a => setNoteData(a))
           .catch(e => {
             console.error(e);
-            setNoteData({ date: dateWithoutTime.valueOf(), note: '', photo: '' });
+            setNoteData({ date: dateWithoutTime.valueOf(), note: '', photo: noteData.photo });
           });
       }
     },
-    [database, dateWithoutTime],
+    [database, dateWithoutTime, noteData.photo],
+  );
+
+  const handlePhotoChange = useCallback(
+    (value: string | null) => {
+      if (database) {
+        database.notes
+          .put({ date: dateWithoutTime.valueOf(), note: noteData.note, photo: value || '' })
+          .then(a => setNoteData(a))
+          .catch(e => {
+            console.error(e);
+            setNoteData({ date: dateWithoutTime.valueOf(), note: noteData.note, photo: '' });
+          });
+      }
+    },
+    [database, dateWithoutTime, noteData.note],
   );
 
   return (
@@ -127,7 +141,7 @@ const Day: React.FC = () => {
           minRows={3}
           onChange={e => handleNoteChange(e.target.value)}
         />
-        <ImagePicker config={config} imageSrcProp={initialImage} />
+        <ImagePicker config={config} imageSrcProp={noteData.photo} imageChanged={handlePhotoChange} />
       </Stack>
       <Divider orientation="horizontal" variant="fullWidth" sx={{ width: '100%' }} />
       <Paper sx={{ width: '100%', borderRadius: 0 }} elevation={0}>

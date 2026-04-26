@@ -53,6 +53,14 @@ const DayRow: React.FC<DayRowProps> = ({ date }: DayRowProps) => {
           <Typography variant="body2" sx={{ fontStyle: 'italic' }}>
             {anniversaryData.note}
           </Typography>
+          {noteData.photo && (
+            <Box
+              component="img"
+              src={noteData.photo}
+              alt={`Note for ${date.toLocaleDateString()}`}
+              sx={{ width: 40, height: 40, borderRadius: 1, objectFit: 'cover', flexShrink: 0 }}
+            />
+          )}
           <Typography variant="body2">{noteData.note}</Typography>
         </Stack>
       </Link>
