@@ -37,6 +37,7 @@ export async function loader() {
 
 type PendingImport = {
   fileName: string;
+  format: 'json' | 'legacy-xml';
   payload: DatabaseTransferPayload;
   summary: ImportConflictSummary;
 };
@@ -126,11 +127,17 @@ const Config: React.FC = () => {
     setStatus(null);
 
     try {
-      const payload = parseImportPayload(await file.text());
+      const fileText = await file.text();
+      const trimmedFileText = fileText.trimStart();
+      const lowerCaseFileName = file.name.toLowerCase();
+      const detectedFormat: PendingImport['format'] =
+        trimmedFileText.startsWith('<') || lowerCaseFileName.endsWith('.xml') ? 'legacy-xml' : 'json';
+      const payload = parseImportPayload(fileText, { fileName: file.name });
       const summary = await analyzeImportPayload(database, payload);
 
       setPendingImport({
         fileName: file.name,
+        format: detectedFormat,
         payload,
         summary,
       });
@@ -208,7 +215,7 @@ const Config: React.FC = () => {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".json,application/json"
+              accept=".json,application/json,.xml,text/xml,application/xml"
               onChange={handleImportFileSelected}
               style={{ display: 'none' }}
             />
@@ -234,6 +241,11 @@ const Config: React.FC = () => {
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <Typography variant="body2">File: {pendingImport?.fileName}</Typography>
+            {pendingImport?.format === 'legacy-xml' && (
+              <Alert severity="info">
+                Detected legacy XML format. The data will be converted and imported into the current Daynote format.
+              </Alert>
+            )}
             <Typography variant="body2">
               Notes: {pendingImport?.summary.noteTotal} total, {pendingImport?.summary.duplicateNotes} duplicates,{' '}
               {pendingImport?.summary.newNotes} new

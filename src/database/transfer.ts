@@ -97,7 +97,121 @@ export function serializeExportPayload(payload: DatabaseTransferPayload): string
   return JSON.stringify(payload, null, 2);
 }
 
-export function parseImportPayload(serializedPayload: string): DatabaseTransferPayload {
+function normalizeLegacyField(value: string | undefined): string {
+  if (value === undefined) {
+    return '';
+  }
+
+  return value.trim().toLowerCase() === '(null)' ? '' : value;
+}
+
+function parseLegacyDateToDayTimestamp(value: string): number {
+  const parsed = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+
+  if (parsed !== null) {
+    const year = Number(parsed[1]);
+    const month = Number(parsed[2]);
+    const day = Number(parsed[3]);
+
+    if (
+      Number.isFinite(year) &&
+      Number.isFinite(month) &&
+      Number.isFinite(day) &&
+      month >= 1 &&
+      month <= 12 &&
+      day >= 1 &&
+      day <= 31
+    ) {
+      return new Date(year, month - 1, day).valueOf();
+    }
+  }
+
+  const fallback = new Date(value);
+
+  if (Number.isNaN(fallback.valueOf())) {
+    throw new Error(`Invalid legacy date value: ${value}`);
+  }
+
+  return new Date(fallback.getFullYear(), fallback.getMonth(), fallback.getDate()).valueOf();
+}
+
+function parseLegacyXmlImportPayload(serializedPayload: string): DatabaseTransferPayload {
+  const parser = new DOMParser();
+  const document = parser.parseFromString(serializedPayload, 'application/xml');
+  const parserError = document.querySelector('parsererror');
+
+  if (parserError !== null) {
+    throw new Error('Invalid XML file.');
+  }
+
+  const entries = Array.from(document.getElementsByTagName('daynotedata'));
+
+  if (entries.length === 0) {
+    throw new Error('No daynotedata entries were found in XML file.');
+  }
+
+  const notesByDate = new Map<number, note>();
+  const anniversariesByDate = new Map<number, anniversary>();
+
+  for (const entry of entries) {
+    const fields = new Map<string, string>();
+
+    for (const child of Array.from(entry.children)) {
+      fields.set(child.tagName.toLowerCase(), child.textContent ?? '');
+    }
+
+    const dateValue = fields.get('date');
+
+    if (dateValue === undefined) {
+      throw new Error('Legacy XML entry is missing a date field.');
+    }
+
+    const date = parseLegacyDateToDayTimestamp(dateValue);
+    const noteText = normalizeLegacyField(fields.get('note'));
+    const photo = normalizeLegacyField(fields.get('photo'));
+    const anniversaryText = normalizeLegacyField(fields.get('anniversary'));
+
+    if (noteText.length > 0 || photo.length > 0) {
+      notesByDate.set(date, {
+        date,
+        note: noteText,
+        photo,
+      });
+    }
+
+    if (anniversaryText.length > 0) {
+      anniversariesByDate.set(date, {
+        date,
+        note: anniversaryText,
+      });
+    }
+  }
+
+  return {
+    schemaVersion: 1,
+    exportedAt: new Date(0).toISOString(),
+    notes: Array.from(notesByDate.values()).sort((left, right) => left.date - right.date),
+    anniversaries: Array.from(anniversariesByDate.values()).sort((left, right) => left.date - right.date),
+  };
+}
+
+export function parseImportPayload(
+  serializedPayload: string,
+  options?: {
+    fileName?: string;
+  },
+): DatabaseTransferPayload {
+  const trimmedPayload = serializedPayload.trimStart();
+  const lowerCaseFileName = options?.fileName?.toLowerCase();
+  const isXmlPayload =
+    trimmedPayload.startsWith('<') ||
+    lowerCaseFileName?.endsWith('.xml') === true ||
+    lowerCaseFileName?.endsWith('.daynote.xml') === true;
+
+  if (isXmlPayload) {
+    return validateImportPayload(parseLegacyXmlImportPayload(serializedPayload));
+  }
+
   let parsedPayload: unknown;
 
   try {
