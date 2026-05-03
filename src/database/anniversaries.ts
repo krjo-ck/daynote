@@ -1,39 +1,65 @@
 export type anniversary = {
-  date: number;
+  dayMonthKey: number;
+  items: anniversaryItem[];
+};
+export type anniversaryItem = {
+  note: string;
+  year?: number;
+};
+
+export type RecurringAnniversary = {
+  dayMonthKey: number;
+  items: anniversaryItem[];
   note: string;
 };
-export type AnniversariesIndexes = 'date';
-export type AnniversariesWhereQueryType<IndexName extends AnniversariesIndexes> = IndexName extends 'date'
+
+export type AnniversariesIndexes = 'dayMonthKey';
+export type AnniversariesWhereQueryType<IndexName extends AnniversariesIndexes> = IndexName extends 'dayMonthKey'
   ? number
   : never;
 export type AnniversariesAddArgs = {
-  date: number;
-  note: string;
+  dayMonthKey: number;
+  items: anniversaryItem[];
 };
 export type AnniversariesPutArgs =
   | AnniversariesAddArgs
   | {
-      date: number;
-      note: string;
+      dayMonthKey: number;
+      items: anniversaryItem[];
     };
 export type AnniversariesDeleteArgs =
   | number
   | {
-      date: number;
+      dayMonthKey: number;
     };
 export type AnniversariesGetArgs =
   | number
   | {
-      date: number;
+      dayMonthKey: number;
     };
-const isAnniversariesDateIndex = (
+const isAnniversariesDayMonthKeyIndex = (
   arg: AnniversariesGetArgs | AnniversariesDeleteArgs,
 ): arg is {
-  date: number;
+  dayMonthKey: number;
 } => {
-  return typeof arg === 'object' && Object.keys(arg).length === 1 && Reflect.has(arg, 'date');
+  return typeof arg === 'object' && Object.keys(arg).length === 1 && Reflect.has(arg, 'dayMonthKey');
 };
+
+export function getDayMonthKeyFromDate(date: Date): number {
+  return (date.getMonth() + 1) * 100 + date.getDate();
+}
+
+export function parseDayMonthKey(dayMonthKey: number): {
+  month: number;
+  day: number;
+} {
+  return {
+    month: Math.trunc(dayMonthKey / 100),
+    day: dayMonthKey % 100,
+  };
+}
+
 export function getAnniversariesId(arg: AnniversariesGetArgs | AnniversariesDeleteArgs) {
-  const id = isAnniversariesDateIndex(arg) ? arg.date : arg;
+  const id = isAnniversariesDayMonthKeyIndex(arg) ? arg.dayMonthKey : arg;
   return id;
 }

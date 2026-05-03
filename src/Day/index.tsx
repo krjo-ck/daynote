@@ -1,9 +1,24 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Params, useLoaderData } from 'react-router-dom';
-import { BottomNavigation, BottomNavigationAction, Paper, Typography, Stack, Divider, TextField } from '@mui/material';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Params, useLoaderData, useNavigate } from 'react-router-dom';
+import {
+  BottomNavigation,
+  BottomNavigationAction,
+  Paper,
+  Typography,
+  Stack,
+  Box,
+  Divider,
+  TextField,
+  List,
+  ListItem,
+  FormControlLabel,
+  Checkbox,
+  Button,
+} from '@mui/material';
 import { DaynotedataClient, init } from '../database';
 import { note } from '../database/notes';
-import { anniversary } from '../database/anniversaries';
+import { anniversaryItem, getDayMonthKeyFromDate } from '../database/anniversaries';
+import { subscribeToImportCompletedSignal } from '../database/importSignal';
 import { getWeekNumber } from '../Week/DateExtensions';
 import ImagePicker, { ImagePickerConf } from './ImagePicker';
 
@@ -14,6 +29,11 @@ export async function loader({ params }: { params: Params }) {
 
 const Day: React.FC = () => {
   const { day } = useLoaderData() as { day: string };
+  const navigate = useNavigate();
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+  const pointerStartX = useRef<number | null>(null);
+  const pointerStartY = useRef<number | null>(null);
   const date = useMemo(() => new Date(Number(day)), [day]);
 
   const currentWeek = useMemo(() => `${date.getFullYear()}w${getWeekNumber(date)}`, [date]);
@@ -24,8 +44,16 @@ const Day: React.FC = () => {
 
   const [database, setDatabase] = useState<DaynotedataClient>();
   const dateWithoutTime = useMemo(() => new Date(date.getFullYear(), date.getMonth(), date.getDate()), [date]);
+  const dayMonthKey = useMemo(() => getDayMonthKeyFromDate(dateWithoutTime), [dateWithoutTime]);
   const [noteData, setNoteData] = useState<note>({ date: date.valueOf(), note: '', photo: '' });
-  const [anniversaryData, setAnniversaryData] = useState<anniversary>({ date: dateWithoutTime.valueOf(), note: '' });
+  const [anniversaryItems, setAnniversaryItems] = useState<anniversaryItem[]>([]);
+  const [newAnniversaryNote, setNewAnniversaryNote] = useState<string>('');
+  const [isNewAnniversaryYearEnabled, setIsNewAnniversaryYearEnabled] = useState<boolean>(false);
+  const [newAnniversaryYear, setNewAnniversaryYear] = useState<string>('');
+  const [editingAnniversaryIndex, setEditingAnniversaryIndex] = useState<number | null>(null);
+  const [editingAnniversaryNote, setEditingAnniversaryNote] = useState<string>('');
+  const [isEditingAnniversaryYearEnabled, setIsEditingAnniversaryYearEnabled] = useState<boolean>(false);
+  const [editingAnniversaryYear, setEditingAnniversaryYear] = useState<string>('');
 
   const config: ImagePickerConf = {
     borderRadius: '8px',
@@ -44,32 +72,229 @@ const Day: React.FC = () => {
       .catch(console.error);
   }, []);
 
-  useEffect(() => {
-    if (database) {
-      database.notes
-        .get(date.valueOf())
-        .then(n => setNoteData(n))
-        .catch(console.error);
-      database.anniversaries
-        .get(dateWithoutTime.valueOf())
-        .then(a => setAnniversaryData(a))
-        .catch(console.error);
-    }
-  }, [database, date, dateWithoutTime]);
+  const sortAnniversaryItems = useCallback((items: anniversaryItem[]) => {
+    return [...items].sort((left, right) => {
+      const leftYear = left.year ?? Number.MIN_SAFE_INTEGER;
+      const rightYear = right.year ?? Number.MIN_SAFE_INTEGER;
 
-  const handleAnniversaryChange = useCallback(
-    (value: string) => {
-      if (database) {
-        database.anniversaries
-          .put({ date: dateWithoutTime.valueOf(), note: value })
-          .then(a => setAnniversaryData(a))
-          .catch(e => {
-            console.error(e);
-            setAnniversaryData({ date: dateWithoutTime.valueOf(), note: '' });
-          });
+      if (leftYear !== rightYear) {
+        return leftYear - rightYear;
       }
+
+      return left.note.localeCompare(right.note);
+    });
+  }, []);
+
+  const normalizeAnniversaryItems = useCallback(
+    (items: anniversaryItem[]) => {
+      const deduplicated = new Map<string, anniversaryItem>();
+
+      for (const item of items) {
+        const normalizedNote = item.note.trim();
+
+        if (normalizedNote.length === 0) {
+          continue;
+        }
+
+        const normalizedYear = item.year;
+        const key = `${normalizedYear ?? 'none'}::${normalizedNote}`;
+
+        if (deduplicated.has(key)) {
+          continue;
+        }
+
+        deduplicated.set(
+          key,
+          normalizedYear === undefined ? { note: normalizedNote } : { note: normalizedNote, year: normalizedYear },
+        );
+      }
+
+      return sortAnniversaryItems(Array.from(deduplicated.values()));
     },
-    [database, dateWithoutTime],
+    [sortAnniversaryItems],
+  );
+
+  const persistAnniversaryItems = useCallback(
+    (items: anniversaryItem[]) => {
+      if (!database) {
+        return Promise.resolve();
+      }
+
+      const normalizedItems = normalizeAnniversaryItems(items);
+
+      if (normalizedItems.length === 0) {
+        return database.anniversaries.delete(dayMonthKey).then(() => {
+          setAnniversaryItems([]);
+        });
+      }
+
+      return database.anniversaries
+        .put({
+          dayMonthKey,
+          items: normalizedItems,
+        })
+        .then(() => {
+          setAnniversaryItems(normalizedItems);
+        });
+    },
+    [database, dayMonthKey, normalizeAnniversaryItems],
+  );
+
+  const refreshDayData = useCallback(() => {
+    if (!database) {
+      return;
+    }
+
+    database.notes
+      .get(date.valueOf())
+      .then(n => setNoteData(n))
+      .catch(console.error);
+
+    database.anniversaries
+      .get(dayMonthKey)
+      .then(a => {
+        const normalizedItems = normalizeAnniversaryItems(a.items);
+        setAnniversaryItems(normalizedItems);
+
+        if (normalizedItems.length !== a.items.length) {
+          database.anniversaries
+            .put({
+              dayMonthKey,
+              items: normalizedItems,
+            })
+            .catch(console.error);
+        }
+      })
+      .catch(() => setAnniversaryItems([]));
+  }, [database, date, dayMonthKey, normalizeAnniversaryItems]);
+
+  useEffect(() => {
+    refreshDayData();
+  }, [refreshDayData]);
+
+  useEffect(() => {
+    return subscribeToImportCompletedSignal(() => {
+      refreshDayData();
+    });
+  }, [refreshDayData]);
+
+  const handleAddAnniversaryEntry = useCallback(() => {
+    if (!database) {
+      return;
+    }
+
+    const trimmedNote = newAnniversaryNote.trim();
+
+    if (trimmedNote.length === 0) {
+      return;
+    }
+
+    const parsedYear = Number(newAnniversaryYear);
+    const shouldSetYear = isNewAnniversaryYearEnabled && Number.isInteger(parsedYear);
+
+    if (isNewAnniversaryYearEnabled && shouldSetYear === false) {
+      return;
+    }
+
+    const itemToAdd: anniversaryItem = shouldSetYear ? { note: trimmedNote, year: parsedYear } : { note: trimmedNote };
+    const updatedItems = normalizeAnniversaryItems([...anniversaryItems, itemToAdd]);
+
+    persistAnniversaryItems(updatedItems)
+      .then(() => {
+        setAnniversaryItems(updatedItems);
+        setNewAnniversaryNote('');
+        setIsNewAnniversaryYearEnabled(false);
+        setNewAnniversaryYear('');
+      })
+      .catch(console.error);
+  }, [
+    anniversaryItems,
+    database,
+    isNewAnniversaryYearEnabled,
+    newAnniversaryNote,
+    newAnniversaryYear,
+    persistAnniversaryItems,
+    normalizeAnniversaryItems,
+  ]);
+
+  const handleStartEditAnniversaryEntry = useCallback(
+    (index: number) => {
+      const item = anniversaryItems[index];
+
+      if (item === undefined) {
+        return;
+      }
+
+      setEditingAnniversaryIndex(index);
+      setEditingAnniversaryNote(item.note);
+      setIsEditingAnniversaryYearEnabled(item.year !== undefined);
+      setEditingAnniversaryYear(item.year?.toString() ?? '');
+    },
+    [anniversaryItems],
+  );
+
+  const handleCancelEditAnniversaryEntry = useCallback(() => {
+    setEditingAnniversaryIndex(null);
+    setEditingAnniversaryNote('');
+    setIsEditingAnniversaryYearEnabled(false);
+    setEditingAnniversaryYear('');
+  }, []);
+
+  const handleSaveEditAnniversaryEntry = useCallback(() => {
+    if (editingAnniversaryIndex === null) {
+      return;
+    }
+
+    const trimmedNote = editingAnniversaryNote.trim();
+
+    if (trimmedNote.length === 0) {
+      return;
+    }
+
+    const parsedYear = Number(editingAnniversaryYear);
+    const shouldSetYear = isEditingAnniversaryYearEnabled && Number.isInteger(parsedYear);
+
+    if (isEditingAnniversaryYearEnabled && shouldSetYear === false) {
+      return;
+    }
+
+    const updatedItem: anniversaryItem = shouldSetYear
+      ? { note: trimmedNote, year: parsedYear }
+      : { note: trimmedNote };
+    const updatedItems = anniversaryItems.map((item, index) =>
+      index === editingAnniversaryIndex ? updatedItem : item,
+    );
+    const sortedItems = normalizeAnniversaryItems(updatedItems);
+
+    persistAnniversaryItems(sortedItems)
+      .then(() => {
+        handleCancelEditAnniversaryEntry();
+      })
+      .catch(console.error);
+  }, [
+    anniversaryItems,
+    editingAnniversaryIndex,
+    editingAnniversaryNote,
+    editingAnniversaryYear,
+    handleCancelEditAnniversaryEntry,
+    isEditingAnniversaryYearEnabled,
+    persistAnniversaryItems,
+    normalizeAnniversaryItems,
+  ]);
+
+  const handleDeleteAnniversaryEntry = useCallback(
+    (indexToDelete: number) => {
+      const updatedItems = anniversaryItems.filter((_, index) => index !== indexToDelete);
+
+      persistAnniversaryItems(updatedItems)
+        .then(() => {
+          if (editingAnniversaryIndex === indexToDelete) {
+            handleCancelEditAnniversaryEntry();
+          }
+        })
+        .catch(console.error);
+    },
+    [anniversaryItems, editingAnniversaryIndex, handleCancelEditAnniversaryEntry, persistAnniversaryItems],
   );
 
   const handleNoteChange = useCallback(
@@ -102,33 +327,246 @@ const Day: React.FC = () => {
     [database, dateWithoutTime, noteData.note],
   );
 
+  const minSwipeDistance = 50;
+
+  const shouldIgnoreGestureTarget = (target: EventTarget | null) => {
+    if (!(target instanceof Element)) {
+      return false;
+    }
+
+    return Boolean(target.closest('input, textarea, select, button, a, [contenteditable="true"]'));
+  };
+
+  const handleGestureEnd = (endX: number, endY: number, startX: number, startY: number) => {
+    const deltaX = endX - startX;
+    const deltaY = endY - startY;
+
+    if (Math.abs(deltaX) < minSwipeDistance || Math.abs(deltaX) <= Math.abs(deltaY)) {
+      return;
+    }
+
+    if (deltaX < 0) {
+      navigate(`/day/${nextDay}`);
+      return;
+    }
+
+    navigate(`/day/${previousDay}`);
+  };
+
+  const handleTouchStart: React.TouchEventHandler<HTMLDivElement> = event => {
+    if (shouldIgnoreGestureTarget(event.target)) {
+      return;
+    }
+
+    const touch = event.changedTouches[0];
+    touchStartX.current = touch.clientX;
+    touchStartY.current = touch.clientY;
+  };
+
+  const handleTouchEnd: React.TouchEventHandler<HTMLDivElement> = event => {
+    if (touchStartX.current === null || touchStartY.current === null) {
+      return;
+    }
+
+    const touch = event.changedTouches[0];
+    const startX = touchStartX.current;
+    const startY = touchStartY.current;
+
+    touchStartX.current = null;
+    touchStartY.current = null;
+
+    handleGestureEnd(touch.clientX, touch.clientY, startX, startY);
+  };
+
+  const handlePointerDown: React.PointerEventHandler<HTMLDivElement> = event => {
+    if (event.pointerType === 'touch' || shouldIgnoreGestureTarget(event.target)) {
+      return;
+    }
+
+    if (event.pointerType === 'mouse' && event.button !== 0) {
+      return;
+    }
+
+    pointerStartX.current = event.clientX;
+    pointerStartY.current = event.clientY;
+  };
+
+  const handlePointerUp: React.PointerEventHandler<HTMLDivElement> = event => {
+    if (event.pointerType === 'touch') {
+      return;
+    }
+
+    if (pointerStartX.current === null || pointerStartY.current === null) {
+      return;
+    }
+
+    const startX = pointerStartX.current;
+    const startY = pointerStartY.current;
+
+    pointerStartX.current = null;
+    pointerStartY.current = null;
+
+    handleGestureEnd(event.clientX, event.clientY, startX, startY);
+  };
+
+  const handlePointerCancel: React.PointerEventHandler<HTMLDivElement> = () => {
+    pointerStartX.current = null;
+    pointerStartY.current = null;
+  };
+
   return (
-    <Stack sx={{ alignItems: 'center', height: '100%', width: '100%' }}>
+    <Stack
+      sx={{ alignItems: 'center', height: '100%', width: '100%' }}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
+    >
       <Paper sx={{ width: '100%', borderRadius: 0 }} elevation={0}>
-        <Stack direction="row" sx={{ alignItems: 'center', width: '100%' }}>
+        <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
           <BottomNavigationAction
             label={currentWeek}
             href={`/week/${currentWeek}`}
             showLabel
             style={{ maxWidth: '80px' }}
           />
-          <Typography variant="h6" sx={{ m: 1, pr: '80px', flex: '1 1 auto', textAlign: 'center' }}>
+          <Typography variant="h6" sx={{ m: 1, textAlign: 'center', flex: '1 1 auto' }}>
             {date.toLocaleDateString()}
           </Typography>
+          <BottomNavigationAction label="Settings" href="/config" showLabel style={{ maxWidth: '80px' }} />
         </Stack>
       </Paper>
       <Divider orientation="horizontal" variant="fullWidth" sx={{ width: '100%' }} />
       <Stack sx={{ alignItems: 'center', height: '100%', width: '100%', p: 1 }}>
-        <TextField
-          id="anniversary"
-          aria-label="anniversary"
-          label="Anniversary"
-          variant="outlined"
-          margin="dense"
-          fullWidth
-          value={anniversaryData.note}
-          onChange={e => handleAnniversaryChange(e.target.value)}
-        />
+        <Typography variant="subtitle1" sx={{ alignSelf: 'flex-start', mt: 0.5 }}>
+          Anniversaries
+        </Typography>
+        <List dense sx={{ width: '100%', pt: 0, pb: 0.5 }}>
+          {anniversaryItems.length === 0 && (
+            <ListItem disableGutters>
+              <Typography variant="body2" color="text.secondary">
+                No anniversary entries for this day.
+              </Typography>
+            </ListItem>
+          )}
+          {anniversaryItems.map((item, index) => (
+            <ListItem key={`${item.note}-${item.year ?? 'no-year'}-${index}`} disableGutters>
+              {editingAnniversaryIndex === index ? (
+                <Stack sx={{ width: '100%', gap: 1, py: 0.5 }}>
+                  <TextField
+                    label="Anniversary note"
+                    variant="outlined"
+                    size="small"
+                    fullWidth
+                    value={editingAnniversaryNote}
+                    onChange={e => setEditingAnniversaryNote(e.target.value)}
+                  />
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={isEditingAnniversaryYearEnabled}
+                        onChange={e => setIsEditingAnniversaryYearEnabled(e.target.checked)}
+                      />
+                    }
+                    label="Set year"
+                  />
+                  {isEditingAnniversaryYearEnabled && (
+                    <TextField
+                      label="Year"
+                      variant="outlined"
+                      size="small"
+                      type="number"
+                      fullWidth
+                      value={editingAnniversaryYear}
+                      onChange={e => setEditingAnniversaryYear(e.target.value)}
+                    />
+                  )}
+                  <Stack direction="row" sx={{ gap: 1 }}>
+                    <Button
+                      variant="contained"
+                      size="small"
+                      onClick={handleSaveEditAnniversaryEntry}
+                      disabled={
+                        editingAnniversaryNote.trim().length === 0 ||
+                        (isEditingAnniversaryYearEnabled && Number.isInteger(Number(editingAnniversaryYear)) === false)
+                      }
+                    >
+                      Save
+                    </Button>
+                    <Button variant="text" size="small" onClick={handleCancelEditAnniversaryEntry}>
+                      Cancel
+                    </Button>
+                  </Stack>
+                </Stack>
+              ) : (
+                <Box
+                  sx={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}
+                >
+                  <Typography variant="body2">{`${item.note} (${item.year ?? 'not set'})`}</Typography>
+                  <Stack direction="row" sx={{ gap: 1 }}>
+                    <Button variant="text" size="small" onClick={() => handleStartEditAnniversaryEntry(index)}>
+                      Edit
+                    </Button>
+                    <Button
+                      variant="text"
+                      color="error"
+                      size="small"
+                      onClick={() => handleDeleteAnniversaryEntry(index)}
+                    >
+                      Delete
+                    </Button>
+                  </Stack>
+                </Box>
+              )}
+            </ListItem>
+          ))}
+        </List>
+        <Stack sx={{ width: '100%', gap: 1, mb: 1 }}>
+          <Typography variant="subtitle2">Add</Typography>
+          <TextField
+            id="anniversary-add-note"
+            aria-label="anniversary-add-note"
+            label="Anniversary note"
+            variant="outlined"
+            size="small"
+            fullWidth
+            value={newAnniversaryNote}
+            onChange={e => setNewAnniversaryNote(e.target.value)}
+          />
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={isNewAnniversaryYearEnabled}
+                onChange={e => setIsNewAnniversaryYearEnabled(e.target.checked)}
+              />
+            }
+            label="Set year"
+          />
+          {isNewAnniversaryYearEnabled && (
+            <TextField
+              id="anniversary-add-year"
+              aria-label="anniversary-add-year"
+              label="Year"
+              variant="outlined"
+              size="small"
+              type="number"
+              fullWidth
+              value={newAnniversaryYear}
+              onChange={e => setNewAnniversaryYear(e.target.value)}
+            />
+          )}
+          <Button
+            variant="contained"
+            onClick={handleAddAnniversaryEntry}
+            disabled={
+              newAnniversaryNote.trim().length === 0 ||
+              (isNewAnniversaryYearEnabled && Number.isInteger(Number(newAnniversaryYear)) === false)
+            }
+          >
+            Add anniversary entry
+          </Button>
+        </Stack>
         <TextField
           id="note"
           aria-label="note"

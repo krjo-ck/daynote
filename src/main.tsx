@@ -10,6 +10,7 @@ import App from './App';
 import ErrorPage from './ErrorPage';
 import Week, { loader as weekLoader } from './Week';
 import Day, { loader as dayLoader } from './Day';
+import Config, { loader as configLoader } from './Config';
 
 const router = createBrowserRouter([
   {
@@ -36,6 +37,11 @@ const router = createBrowserRouter([
         path: 'day/:day',
         element: <Day />,
         loader: dayLoader,
+      },
+      {
+        path: 'config',
+        element: <Config />,
+        loader: configLoader,
       },
     ],
   },

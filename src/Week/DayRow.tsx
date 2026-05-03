@@ -2,8 +2,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Typography, Box, Stack } from '@mui/material';
 import { note } from '../database/notes';
-import { anniversary } from '../database/anniversaries';
+import { RecurringAnniversary, getDayMonthKeyFromDate } from '../database/anniversaries';
 import { DaynotedataClient, init } from '../database';
+import { getRecurringAnniversaryForDate } from '../database/anniversaryRecurrence';
+import { subscribeToImportCompletedSignal } from '../database/importSignal';
 
 interface DayRowProps {
   date: Date;
@@ -14,7 +16,11 @@ const DayRow: React.FC<DayRowProps> = ({ date }: DayRowProps) => {
   const dateWithoutTime = useMemo(() => new Date(date.getFullYear(), date.getMonth(), date.getDate()), [date]);
   const today = new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
   const [noteData, setNoteData] = useState<note>({ date: date.valueOf(), note: '', photo: '' });
-  const [anniversaryData, setAnniversaryData] = useState<anniversary>({ date: dateWithoutTime.valueOf(), note: '' });
+  const [anniversaryData, setAnniversaryData] = useState<RecurringAnniversary>({
+    dayMonthKey: getDayMonthKeyFromDate(dateWithoutTime),
+    items: [],
+    note: '',
+  });
 
   useEffect(() => {
     init()
@@ -24,18 +30,29 @@ const DayRow: React.FC<DayRowProps> = ({ date }: DayRowProps) => {
       .catch(console.error);
   }, []);
 
-  useEffect(() => {
-    if (database) {
-      database.notes
-        .get(date.valueOf())
-        .then(n => setNoteData(n))
-        .catch(console.error);
-      database.anniversaries
-        .get(dateWithoutTime.valueOf())
-        .then(a => setAnniversaryData(a))
-        .catch(console.error);
+  const refreshDayRowData = React.useCallback(() => {
+    if (!database) {
+      return;
     }
+
+    database.notes
+      .get(date.valueOf())
+      .then(n => setNoteData(n))
+      .catch(console.error);
+    getRecurringAnniversaryForDate(database, dateWithoutTime)
+      .then(a => setAnniversaryData(a))
+      .catch(console.error);
   }, [database, date, dateWithoutTime]);
+
+  useEffect(() => {
+    refreshDayRowData();
+  }, [refreshDayRowData]);
+
+  useEffect(() => {
+    return subscribeToImportCompletedSignal(() => {
+      refreshDayRowData();
+    });
+  }, [refreshDayRowData]);
 
   return (
     <Box sx={{ width: '100%' }}>
