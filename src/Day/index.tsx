@@ -4,6 +4,7 @@ import { BottomNavigation, BottomNavigationAction, Paper, Typography, Stack, Div
 import { DaynotedataClient, init } from '../database';
 import { note } from '../database/notes';
 import { anniversary } from '../database/anniversaries';
+import { subscribeToImportCompletedSignal } from '../database/importSignal';
 import { getWeekNumber } from '../Week/DateExtensions';
 import ImagePicker, { ImagePickerConf } from './ImagePicker';
 
@@ -49,18 +50,30 @@ const Day: React.FC = () => {
       .catch(console.error);
   }, []);
 
-  useEffect(() => {
-    if (database) {
-      database.notes
-        .get(date.valueOf())
-        .then(n => setNoteData(n))
-        .catch(console.error);
-      database.anniversaries
-        .get(dateWithoutTime.valueOf())
-        .then(a => setAnniversaryData(a))
-        .catch(console.error);
+  const refreshDayData = useCallback(() => {
+    if (!database) {
+      return;
     }
+
+    database.notes
+      .get(date.valueOf())
+      .then(n => setNoteData(n))
+      .catch(console.error);
+    database.anniversaries
+      .get(dateWithoutTime.valueOf())
+      .then(a => setAnniversaryData(a))
+      .catch(console.error);
   }, [database, date, dateWithoutTime]);
+
+  useEffect(() => {
+    refreshDayData();
+  }, [refreshDayData]);
+
+  useEffect(() => {
+    return subscribeToImportCompletedSignal(() => {
+      refreshDayData();
+    });
+  }, [refreshDayData]);
 
   const handleAnniversaryChange = useCallback(
     (value: string) => {
@@ -204,16 +217,17 @@ const Day: React.FC = () => {
       onPointerCancel={handlePointerCancel}
     >
       <Paper sx={{ width: '100%', borderRadius: 0 }} elevation={0}>
-        <Stack direction="row" sx={{ alignItems: 'center', width: '100%' }}>
+        <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
           <BottomNavigationAction
             label={currentWeek}
             href={`/week/${currentWeek}`}
             showLabel
             style={{ maxWidth: '80px' }}
           />
-          <Typography variant="h6" sx={{ m: 1, pr: '80px', flex: '1 1 auto', textAlign: 'center' }}>
+          <Typography variant="h6" sx={{ m: 1, textAlign: 'center', flex: '1 1 auto' }}>
             {date.toLocaleDateString()}
           </Typography>
+          <BottomNavigationAction label="Settings" href="/config" showLabel style={{ maxWidth: '80px' }} />
         </Stack>
       </Paper>
       <Divider orientation="horizontal" variant="fullWidth" sx={{ width: '100%' }} />

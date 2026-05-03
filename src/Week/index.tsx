@@ -1,6 +1,6 @@
 import React, { useMemo, useRef } from 'react';
 import { Params, useLoaderData, useNavigate } from 'react-router-dom';
-import { BottomNavigation, BottomNavigationAction, Paper, Typography, Stack, Divider } from '@mui/material';
+import { BottomNavigation, BottomNavigationAction, Paper, Typography, Stack, Divider, Box } from '@mui/material';
 import { getLastWeekNumberOfYear, getWeekNumber, getWeekDates } from './DateExtensions';
 import DayRow from './DayRow';
 
@@ -136,10 +136,12 @@ const Week: React.FC = () => {
       onPointerCancel={handlePointerCancel}
     >
       <Paper sx={{ width: '100%', borderRadius: 0 }} elevation={0}>
-        <Stack sx={{ alignItems: 'center', width: '100%' }}>
-          <Typography variant="h6" sx={{ m: 1 }}>
+        <Stack direction="row" sx={{ alignItems: 'center', width: '100%' }}>
+          <Box sx={{ width: 88, flexShrink: 0 }} />
+          <Typography variant="h6" sx={{ m: 1, textAlign: 'center', flex: '1 1 auto' }}>
             {month} {week}
           </Typography>
+          <BottomNavigationAction label="Settings" href="/config" showLabel style={{ maxWidth: '88px' }} />
         </Stack>
       </Paper>
       <Divider orientation="horizontal" variant="fullWidth" sx={{ width: '100%' }} />

@@ -4,6 +4,7 @@ import { Typography, Box, Stack } from '@mui/material';
 import { note } from '../database/notes';
 import { anniversary } from '../database/anniversaries';
 import { DaynotedataClient, init } from '../database';
+import { subscribeToImportCompletedSignal } from '../database/importSignal';
 
 interface DayRowProps {
   date: Date;
@@ -24,18 +25,30 @@ const DayRow: React.FC<DayRowProps> = ({ date }: DayRowProps) => {
       .catch(console.error);
   }, []);
 
-  useEffect(() => {
-    if (database) {
-      database.notes
-        .get(date.valueOf())
-        .then(n => setNoteData(n))
-        .catch(console.error);
-      database.anniversaries
-        .get(dateWithoutTime.valueOf())
-        .then(a => setAnniversaryData(a))
-        .catch(console.error);
+  const refreshDayRowData = React.useCallback(() => {
+    if (!database) {
+      return;
     }
+
+    database.notes
+      .get(date.valueOf())
+      .then(n => setNoteData(n))
+      .catch(console.error);
+    database.anniversaries
+      .get(dateWithoutTime.valueOf())
+      .then(a => setAnniversaryData(a))
+      .catch(console.error);
   }, [database, date, dateWithoutTime]);
+
+  useEffect(() => {
+    refreshDayRowData();
+  }, [refreshDayRowData]);
+
+  useEffect(() => {
+    return subscribeToImportCompletedSignal(() => {
+      refreshDayRowData();
+    });
+  }, [refreshDayRowData]);
 
   return (
     <Box sx={{ width: '100%' }}>
