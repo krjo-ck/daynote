@@ -26,8 +26,54 @@ type LegacyAnniversary = {
   note: string;
 };
 
+function parseLegacyAnniversaryWithYear(value: string):
+  | {
+      note: string;
+      year: number;
+    }
+  | undefined {
+  const parsed = value.match(/^(.*?)\s*\((\d{4})\)\s*$/);
+
+  if (parsed === null) {
+    return undefined;
+  }
+
+  const note = parsed[1].trim();
+  const year = Number(parsed[2]);
+
+  if (note.length === 0 || Number.isFinite(year) === false) {
+    return undefined;
+  }
+
+  return {
+    note,
+    year,
+  };
+}
+
+function parseLegacyAnniversaryItems(value: string): anniversaryItem[] {
+  return value
+    .split(',')
+    .map(item => item.trim())
+    .filter(item => item.length > 0)
+    .map(item => {
+      const parsed = parseLegacyAnniversaryWithYear(item);
+
+      if (parsed === undefined) {
+        return {
+          note: item,
+        };
+      }
+
+      return {
+        note: parsed.note,
+        year: parsed.year,
+      };
+    });
+}
+
 function migrateLegacyAnniversaries(source: LegacyAnniversary[]): anniversary[] {
-  const groupedByDayMonth = new Map<number, anniversaryItem[]>();
+  const groupedByDayMonth = new Map<number, Map<string, anniversaryItem>>();
 
   for (const entry of source) {
     if (typeof entry.date !== 'number' || Number.isFinite(entry.date) === false || typeof entry.note !== 'string') {
@@ -41,19 +87,20 @@ function migrateLegacyAnniversaries(source: LegacyAnniversary[]): anniversary[] 
     }
 
     const dayMonthKey = getDayMonthKeyFromDate(sourceDate);
-    const migratedItem: anniversaryItem = {
-      note: entry.note,
-      year: sourceDate.getFullYear(),
-    };
-    const existingItems = groupedByDayMonth.get(dayMonthKey) ?? [];
-    existingItems.push(migratedItem);
+    const existingItems = groupedByDayMonth.get(dayMonthKey) ?? new Map<string, anniversaryItem>();
+
+    for (const item of parseLegacyAnniversaryItems(entry.note)) {
+      const dedupeKey = `${item.year ?? 'none'}::${item.note.toLowerCase()}`;
+      existingItems.set(dedupeKey, item);
+    }
+
     groupedByDayMonth.set(dayMonthKey, existingItems);
   }
 
   return Array.from(groupedByDayMonth.entries())
     .map(([dayMonthKey, items]) => ({
       dayMonthKey,
-      items: items.sort((left, right) => {
+      items: Array.from(items.values()).sort((left, right) => {
         const leftYear = left.year ?? Number.MIN_SAFE_INTEGER;
         const rightYear = right.year ?? Number.MIN_SAFE_INTEGER;
         return leftYear - rightYear;

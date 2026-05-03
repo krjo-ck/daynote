@@ -156,6 +156,27 @@ function parseLegacyAnniversaryWithYear(value: string):
   };
 }
 
+function parseLegacyAnniversaryItems(value: string): anniversaryItem[] {
+  return value
+    .split(',')
+    .map(item => item.trim())
+    .filter(item => item.length > 0)
+    .map(item => {
+      const parsed = parseLegacyAnniversaryWithYear(item);
+
+      if (parsed === undefined) {
+        return {
+          note: item,
+        };
+      }
+
+      return {
+        note: parsed.text,
+        year: parsed.year,
+      };
+    });
+}
+
 function parseLegacyDateToDayTimestamp(value: string): number {
   const parsed = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
 
@@ -202,7 +223,7 @@ function parseLegacyXmlImportPayload(serializedPayload: string): DatabaseTransfe
   }
 
   const notesByDate = new Map<number, note>();
-  const anniversariesByDayMonth = new Map<number, anniversary>();
+  const anniversariesByDayMonth = new Map<number, Map<string, anniversaryItem>>();
 
   for (const entry of entries) {
     const fields = new Map<string, string>();
@@ -233,27 +254,14 @@ function parseLegacyXmlImportPayload(serializedPayload: string): DatabaseTransfe
     if (anniversaryText.length > 0) {
       const sourceDate = new Date(date);
       const dayMonthKey = getDayMonthKeyFromDate(sourceDate);
-      let anniversaryYear: number | undefined = sourceDate.getFullYear();
-      let anniversaryNote = anniversaryText;
-      const parsedAnniversaryWithYear = parseLegacyAnniversaryWithYear(anniversaryText);
+      const existingItems = anniversariesByDayMonth.get(dayMonthKey) ?? new Map<string, anniversaryItem>();
 
-      if (parsedAnniversaryWithYear !== undefined) {
-        anniversaryNote = parsedAnniversaryWithYear.text;
-        anniversaryYear = parsedAnniversaryWithYear.year;
+      for (const item of parseLegacyAnniversaryItems(anniversaryText)) {
+        const dedupeKey = `${item.year ?? 'none'}::${item.note.toLowerCase()}`;
+        existingItems.set(dedupeKey, item);
       }
 
-      const existing = anniversariesByDayMonth.get(dayMonthKey);
-      const item: anniversaryItem =
-        anniversaryYear === undefined ? { note: anniversaryNote } : { note: anniversaryNote, year: anniversaryYear };
-
-      if (existing === undefined) {
-        anniversariesByDayMonth.set(dayMonthKey, {
-          dayMonthKey,
-          items: [item],
-        });
-      } else {
-        existing.items.push(item);
-      }
+      anniversariesByDayMonth.set(dayMonthKey, existingItems);
     }
   }
 
@@ -261,10 +269,10 @@ function parseLegacyXmlImportPayload(serializedPayload: string): DatabaseTransfe
     schemaVersion: 1,
     exportedAt: new Date(0).toISOString(),
     notes: Array.from(notesByDate.values()).sort((left, right) => left.date - right.date),
-    anniversaries: Array.from(anniversariesByDayMonth.values())
-      .map(entry => ({
-        dayMonthKey: entry.dayMonthKey,
-        items: entry.items.sort((left, right) => {
+    anniversaries: Array.from(anniversariesByDayMonth.entries())
+      .map(([dayMonthKey, items]) => ({
+        dayMonthKey,
+        items: Array.from(items.values()).sort((left, right) => {
           const leftYear = left.year ?? Number.MIN_SAFE_INTEGER;
           const rightYear = right.year ?? Number.MIN_SAFE_INTEGER;
           return leftYear - rightYear;
