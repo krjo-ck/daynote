@@ -4,6 +4,7 @@ import { Typography, Box, Stack } from '@mui/material';
 import { note } from '../database/notes';
 import { anniversary } from '../database/anniversaries';
 import { DaynotedataClient, init } from '../database';
+import { getRecurringAnniversaryForDate } from '../database/anniversaryRecurrence';
 import { subscribeToImportCompletedSignal } from '../database/importSignal';
 
 interface DayRowProps {
@@ -34,8 +35,7 @@ const DayRow: React.FC<DayRowProps> = ({ date }: DayRowProps) => {
       .get(date.valueOf())
       .then(n => setNoteData(n))
       .catch(console.error);
-    database.anniversaries
-      .get(dateWithoutTime.valueOf())
+    getRecurringAnniversaryForDate(database, dateWithoutTime)
       .then(a => setAnniversaryData(a))
       .catch(console.error);
   }, [database, date, dateWithoutTime]);

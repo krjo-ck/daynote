@@ -112,6 +112,31 @@ function normalizeLegacyField(value: string | undefined): string {
   return value.trim().toLowerCase() === '(null)' ? '' : value;
 }
 
+function parseLegacyAnniversaryWithYear(value: string):
+  | {
+      text: string;
+      year: number;
+    }
+  | undefined {
+  const parsed = value.match(/^(.*?)\s*\((\d{4})\)\s*$/);
+
+  if (parsed === null) {
+    return undefined;
+  }
+
+  const text = parsed[1].trim();
+  const year = Number(parsed[2]);
+
+  if (text.length === 0 || Number.isFinite(year) === false) {
+    return undefined;
+  }
+
+  return {
+    text,
+    year,
+  };
+}
+
 function parseLegacyDateToDayTimestamp(value: string): number {
   const parsed = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
 
@@ -187,9 +212,23 @@ function parseLegacyXmlImportPayload(serializedPayload: string): DatabaseTransfe
     }
 
     if (anniversaryText.length > 0) {
-      anniversariesByDate.set(date, {
-        date,
-        note: anniversaryText,
+      let anniversaryDate = date;
+      let anniversaryNote = anniversaryText;
+      const parsedAnniversaryWithYear = parseLegacyAnniversaryWithYear(anniversaryText);
+
+      if (parsedAnniversaryWithYear !== undefined) {
+        anniversaryNote = parsedAnniversaryWithYear.text;
+        const sourceDate = new Date(date);
+        anniversaryDate = new Date(
+          parsedAnniversaryWithYear.year,
+          sourceDate.getMonth(),
+          sourceDate.getDate(),
+        ).valueOf();
+      }
+
+      anniversariesByDate.set(anniversaryDate, {
+        date: anniversaryDate,
+        note: anniversaryNote,
       });
     }
   }

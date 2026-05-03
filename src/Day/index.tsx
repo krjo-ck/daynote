@@ -4,6 +4,7 @@ import { BottomNavigation, BottomNavigationAction, Paper, Typography, Stack, Div
 import { DaynotedataClient, init } from '../database';
 import { note } from '../database/notes';
 import { anniversary } from '../database/anniversaries';
+import { getRecurringAnniversaryForDate } from '../database/anniversaryRecurrence';
 import { subscribeToImportCompletedSignal } from '../database/importSignal';
 import { getWeekNumber } from '../Week/DateExtensions';
 import ImagePicker, { ImagePickerConf } from './ImagePicker';
@@ -59,8 +60,7 @@ const Day: React.FC = () => {
       .get(date.valueOf())
       .then(n => setNoteData(n))
       .catch(console.error);
-    database.anniversaries
-      .get(dateWithoutTime.valueOf())
+    getRecurringAnniversaryForDate(database, dateWithoutTime)
       .then(a => setAnniversaryData(a))
       .catch(console.error);
   }, [database, date, dateWithoutTime]);
