@@ -1,5 +1,5 @@
 import { DaynotedataClient } from '.';
-import { anniversary } from './anniversaries';
+import { anniversary, anniversaryItem, getDayMonthKeyFromDate, parseDayMonthKey } from './anniversaries';
 import { note } from './notes';
 
 const MERGE_SEPARATOR = '\n\n';
@@ -68,9 +68,25 @@ function mergeNotes(existing: note, incoming: note): note {
 }
 
 function mergeAnniversaries(existing: anniversary, incoming: anniversary): anniversary {
+  const mergedItems = new Map<string, anniversaryItem>();
+
+  for (const item of existing.items) {
+    const key = `${item.year ?? 'none'}::${item.note}`;
+    mergedItems.set(key, item);
+  }
+
+  for (const item of incoming.items) {
+    const key = `${item.year ?? 'none'}::${item.note}`;
+    mergedItems.set(key, item);
+  }
+
   return {
-    date: existing.date,
-    note: appendText(existing.note, incoming.note),
+    dayMonthKey: existing.dayMonthKey,
+    items: Array.from(mergedItems.values()).sort((left, right) => {
+      const leftYear = left.year ?? Number.MIN_SAFE_INTEGER;
+      const rightYear = right.year ?? Number.MIN_SAFE_INTEGER;
+      return leftYear - rightYear;
+    }),
   };
 }
 
@@ -90,7 +106,10 @@ function waitForRequestCompletion(request: IDBRequest): Promise<void> {
 }
 
 export async function buildExportPayload(client: DaynotedataClient): Promise<DatabaseTransferPayload> {
-  const [notes, anniversaries] = await Promise.all([client.notes.sortBy('date'), client.anniversaries.sortBy('date')]);
+  const [notes, anniversaries] = await Promise.all([
+    client.notes.sortBy('date'),
+    client.anniversaries.sortBy('dayMonthKey'),
+  ]);
 
   return {
     schemaVersion: 1,
@@ -183,7 +202,7 @@ function parseLegacyXmlImportPayload(serializedPayload: string): DatabaseTransfe
   }
 
   const notesByDate = new Map<number, note>();
-  const anniversariesByDate = new Map<number, anniversary>();
+  const anniversariesByDayMonth = new Map<number, anniversary>();
 
   for (const entry of entries) {
     const fields = new Map<string, string>();
@@ -212,24 +231,29 @@ function parseLegacyXmlImportPayload(serializedPayload: string): DatabaseTransfe
     }
 
     if (anniversaryText.length > 0) {
-      let anniversaryDate = date;
+      const sourceDate = new Date(date);
+      const dayMonthKey = getDayMonthKeyFromDate(sourceDate);
+      let anniversaryYear: number | undefined = sourceDate.getFullYear();
       let anniversaryNote = anniversaryText;
       const parsedAnniversaryWithYear = parseLegacyAnniversaryWithYear(anniversaryText);
 
       if (parsedAnniversaryWithYear !== undefined) {
         anniversaryNote = parsedAnniversaryWithYear.text;
-        const sourceDate = new Date(date);
-        anniversaryDate = new Date(
-          parsedAnniversaryWithYear.year,
-          sourceDate.getMonth(),
-          sourceDate.getDate(),
-        ).valueOf();
+        anniversaryYear = parsedAnniversaryWithYear.year;
       }
 
-      anniversariesByDate.set(anniversaryDate, {
-        date: anniversaryDate,
-        note: anniversaryNote,
-      });
+      const existing = anniversariesByDayMonth.get(dayMonthKey);
+      const item: anniversaryItem =
+        anniversaryYear === undefined ? { note: anniversaryNote } : { note: anniversaryNote, year: anniversaryYear };
+
+      if (existing === undefined) {
+        anniversariesByDayMonth.set(dayMonthKey, {
+          dayMonthKey,
+          items: [item],
+        });
+      } else {
+        existing.items.push(item);
+      }
     }
   }
 
@@ -237,7 +261,16 @@ function parseLegacyXmlImportPayload(serializedPayload: string): DatabaseTransfe
     schemaVersion: 1,
     exportedAt: new Date(0).toISOString(),
     notes: Array.from(notesByDate.values()).sort((left, right) => left.date - right.date),
-    anniversaries: Array.from(anniversariesByDate.values()).sort((left, right) => left.date - right.date),
+    anniversaries: Array.from(anniversariesByDayMonth.values())
+      .map(entry => ({
+        dayMonthKey: entry.dayMonthKey,
+        items: entry.items.sort((left, right) => {
+          const leftYear = left.year ?? Number.MIN_SAFE_INTEGER;
+          const rightYear = right.year ?? Number.MIN_SAFE_INTEGER;
+          return leftYear - rightYear;
+        }),
+      }))
+      .sort((left, right) => left.dayMonthKey - right.dayMonthKey),
   };
 }
 
@@ -293,11 +326,21 @@ export function applyDateOffset(payload: DatabaseTransferPayload, offsetDays: nu
       }))
       .sort((left, right) => left.date - right.date),
     anniversaries: payload.anniversaries
-      .map(item => ({
-        ...item,
-        date: item.date + offsetMilliseconds,
-      }))
-      .sort((left, right) => left.date - right.date),
+      .map(item => {
+        const { month, day } = parseDayMonthKey(item.dayMonthKey);
+        const baseDate = new Date(2000, month - 1, day);
+        const shifted = new Date(baseDate.valueOf() + offsetMilliseconds);
+        const yearDelta = shifted.getFullYear() - 2000;
+
+        return {
+          dayMonthKey: getDayMonthKeyFromDate(shifted),
+          items: item.items.map(anniversaryItemEntry => ({
+            note: anniversaryItemEntry.note,
+            year: anniversaryItemEntry.year === undefined ? undefined : anniversaryItemEntry.year + yearDelta,
+          })),
+        };
+      })
+      .sort((left, right) => left.dayMonthKey - right.dayMonthKey),
   };
 }
 
@@ -369,29 +412,52 @@ export function validateImportPayload(payload: unknown): DatabaseTransferPayload
     };
   });
 
-  const seenAnniversaryDates = new Set<number>();
+  const seenAnniversaryDayMonthKeys = new Set<number>();
   const validatedAnniversaries: anniversary[] = anniversariesData.map((entry, index) => {
     if (!isObject(entry)) {
       throw new Error(`Invalid anniversaries entry at index ${index}.`);
     }
 
-    if (typeof entry.date !== 'number' || Number.isFinite(entry.date) === false) {
-      throw new Error(`anniversaries[${index}].date must be a valid number.`);
+    if (typeof entry.dayMonthKey !== 'number' || Number.isFinite(entry.dayMonthKey) === false) {
+      throw new Error(`anniversaries[${index}].dayMonthKey must be a valid number.`);
     }
 
-    if (seenAnniversaryDates.has(entry.date)) {
-      throw new Error(`Duplicate date found in anniversaries payload: ${entry.date}.`);
+    if (seenAnniversaryDayMonthKeys.has(entry.dayMonthKey)) {
+      throw new Error(`Duplicate dayMonthKey found in anniversaries payload: ${entry.dayMonthKey}.`);
     }
 
-    if (typeof entry.note !== 'string') {
-      throw new Error(`anniversaries[${index}].note must be a string.`);
+    if (!Array.isArray(entry.items)) {
+      throw new Error(`anniversaries[${index}].items must be an array.`);
     }
 
-    seenAnniversaryDates.add(entry.date);
+    const validatedItems = entry.items.map((item, itemIndex) => {
+      if (!isObject(item)) {
+        throw new Error(`anniversaries[${index}].items[${itemIndex}] must be an object.`);
+      }
+
+      if (typeof item.note !== 'string') {
+        throw new Error(`anniversaries[${index}].items[${itemIndex}].note must be a string.`);
+      }
+
+      if (item.year !== undefined && (typeof item.year !== 'number' || Number.isInteger(item.year) === false)) {
+        throw new Error(`anniversaries[${index}].items[${itemIndex}].year must be an integer when present.`);
+      }
+
+      return item.year === undefined
+        ? {
+            note: item.note,
+          }
+        : {
+            note: item.note,
+            year: item.year,
+          };
+    });
+
+    seenAnniversaryDayMonthKeys.add(entry.dayMonthKey);
 
     return {
-      date: entry.date,
-      note: entry.note,
+      dayMonthKey: entry.dayMonthKey,
+      items: validatedItems,
     };
   });
 
@@ -409,11 +475,11 @@ export async function analyzeImportPayload(
 ): Promise<ImportConflictSummary> {
   const [existingNotes, existingAnniversaries] = await Promise.all([
     client.notes.sortBy('date'),
-    client.anniversaries.sortBy('date'),
+    client.anniversaries.sortBy('dayMonthKey'),
   ]);
 
   const noteDates = new Set(existingNotes.map(entry => entry.date));
-  const anniversaryDates = new Set(existingAnniversaries.map(entry => entry.date));
+  const anniversaryDayMonthKeys = new Set(existingAnniversaries.map(entry => entry.dayMonthKey));
 
   let duplicateNotes = 0;
   let duplicateAnniversaries = 0;
@@ -425,7 +491,7 @@ export async function analyzeImportPayload(
   }
 
   for (const item of payload.anniversaries) {
-    if (anniversaryDates.has(item.date)) {
+    if (anniversaryDayMonthKeys.has(item.dayMonthKey)) {
       duplicateAnniversaries += 1;
     }
   }
@@ -447,11 +513,13 @@ export async function importPayload(
 ): Promise<ImportReport> {
   const [existingNotes, existingAnniversaries] = await Promise.all([
     client.notes.sortBy('date'),
-    client.anniversaries.sortBy('date'),
+    client.anniversaries.sortBy('dayMonthKey'),
   ]);
 
   const notesByDate = new Map<number, note>(existingNotes.map(entry => [entry.date, entry]));
-  const anniversariesByDate = new Map<number, anniversary>(existingAnniversaries.map(entry => [entry.date, entry]));
+  const anniversariesByDayMonth = new Map<number, anniversary>(
+    existingAnniversaries.map(entry => [entry.dayMonthKey, entry]),
+  );
 
   const report: ImportReport = {
     mode,
@@ -503,11 +571,11 @@ export async function importPayload(
   }
 
   for (const incomingAnniversary of payload.anniversaries) {
-    const existing = anniversariesByDate.get(incomingAnniversary.date);
+    const existing = anniversariesByDayMonth.get(incomingAnniversary.dayMonthKey);
 
     if (existing === undefined) {
       await client.anniversaries.put(incomingAnniversary, { transaction });
-      anniversariesByDate.set(incomingAnniversary.date, incomingAnniversary);
+      anniversariesByDayMonth.set(incomingAnniversary.dayMonthKey, incomingAnniversary);
       report.anniversaries.inserted += 1;
       continue;
     }
@@ -519,14 +587,14 @@ export async function importPayload(
 
     if (mode === 'overwrite') {
       await client.anniversaries.put(incomingAnniversary, { transaction });
-      anniversariesByDate.set(incomingAnniversary.date, incomingAnniversary);
+      anniversariesByDayMonth.set(incomingAnniversary.dayMonthKey, incomingAnniversary);
       report.anniversaries.updated += 1;
       continue;
     }
 
     const merged = mergeAnniversaries(existing, incomingAnniversary);
     await client.anniversaries.put(merged, { transaction });
-    anniversariesByDate.set(merged.date, merged);
+    anniversariesByDayMonth.set(merged.dayMonthKey, merged);
     report.anniversaries.merged += 1;
   }
 

@@ -6,6 +6,8 @@ import {
   AnniversariesPutArgs,
   AnniversariesWhereQueryType,
   anniversary,
+  anniversaryItem,
+  getDayMonthKeyFromDate,
   getAnniversariesId,
 } from './anniversaries';
 import {
@@ -18,6 +20,47 @@ import {
   getNotesId,
   note,
 } from './notes';
+
+type LegacyAnniversary = {
+  date: number;
+  note: string;
+};
+
+function migrateLegacyAnniversaries(source: LegacyAnniversary[]): anniversary[] {
+  const groupedByDayMonth = new Map<number, anniversaryItem[]>();
+
+  for (const entry of source) {
+    if (typeof entry.date !== 'number' || Number.isFinite(entry.date) === false || typeof entry.note !== 'string') {
+      continue;
+    }
+
+    const sourceDate = new Date(entry.date);
+
+    if (Number.isNaN(sourceDate.valueOf())) {
+      continue;
+    }
+
+    const dayMonthKey = getDayMonthKeyFromDate(sourceDate);
+    const migratedItem: anniversaryItem = {
+      note: entry.note,
+      year: sourceDate.getFullYear(),
+    };
+    const existingItems = groupedByDayMonth.get(dayMonthKey) ?? [];
+    existingItems.push(migratedItem);
+    groupedByDayMonth.set(dayMonthKey, existingItems);
+  }
+
+  return Array.from(groupedByDayMonth.entries())
+    .map(([dayMonthKey, items]) => ({
+      dayMonthKey,
+      items: items.sort((left, right) => {
+        const leftYear = left.year ?? Number.MIN_SAFE_INTEGER;
+        const rightYear = right.year ?? Number.MIN_SAFE_INTEGER;
+        return leftYear - rightYear;
+      }),
+    }))
+    .sort((left, right) => left.dayMonthKey - right.dayMonthKey);
+}
 
 type RangeQuery<ArgType, ReturnType> = {
   isGreaterThan(arg: ArgType): ReturnType;
@@ -142,8 +185,7 @@ function createTableClient<TItem, TAddArgs, TPutArgs, TDeleteArgs, TGetArgs, TIn
           if (DBAddRequest != null) {
             const mergedResult: TItem = {
               ...arg,
-              date: DBAddRequest.result,
-            } as TItem;
+            } as unknown as TItem;
             this._push('add', mergedResult);
             resolve(mergedResult);
           } else {
@@ -176,8 +218,7 @@ function createTableClient<TItem, TAddArgs, TPutArgs, TDeleteArgs, TGetArgs, TIn
           if (DBPutRequest != null) {
             const mergedResult: TItem = {
               ...arg,
-              date: DBPutRequest.result,
-            } as TItem;
+            } as unknown as TItem;
             this._push('put', mergedResult);
             resolve(mergedResult);
           } else {
@@ -287,6 +328,9 @@ function createTableClient<TItem, TAddArgs, TPutArgs, TDeleteArgs, TGetArgs, TIn
             case 'date': {
               return executeQuery(store, IDBKeyRange.lowerBound(query, true));
             }
+            case 'dayMonthKey': {
+              return executeQuery(store, IDBKeyRange.lowerBound(query, true));
+            }
             default: {
               return Promise.reject(new Error('Trying to run query on unknown index: ' + indexName));
             }
@@ -295,6 +339,9 @@ function createTableClient<TItem, TAddArgs, TPutArgs, TDeleteArgs, TGetArgs, TIn
         isGreaterThanOrEqualTo(query) {
           switch (indexName) {
             case 'date': {
+              return executeQuery(store, IDBKeyRange.lowerBound(query, false));
+            }
+            case 'dayMonthKey': {
               return executeQuery(store, IDBKeyRange.lowerBound(query, false));
             }
             default: {
@@ -307,6 +354,9 @@ function createTableClient<TItem, TAddArgs, TPutArgs, TDeleteArgs, TGetArgs, TIn
             case 'date': {
               return executeQuery(store, IDBKeyRange.upperBound(query, true));
             }
+            case 'dayMonthKey': {
+              return executeQuery(store, IDBKeyRange.upperBound(query, true));
+            }
             default: {
               return Promise.reject(new Error('Trying to run query on unknown index: ' + indexName));
             }
@@ -315,6 +365,9 @@ function createTableClient<TItem, TAddArgs, TPutArgs, TDeleteArgs, TGetArgs, TIn
         isLessThanOrEqualTo(query) {
           switch (indexName) {
             case 'date': {
+              return executeQuery(store, IDBKeyRange.upperBound(query, false));
+            }
+            case 'dayMonthKey': {
               return executeQuery(store, IDBKeyRange.upperBound(query, false));
             }
             default: {
@@ -327,6 +380,9 @@ function createTableClient<TItem, TAddArgs, TPutArgs, TDeleteArgs, TGetArgs, TIn
             case 'date': {
               return executeQuery(store, IDBKeyRange.bound(query.from, query.to, false, false));
             }
+            case 'dayMonthKey': {
+              return executeQuery(store, IDBKeyRange.bound(query.from, query.to, false, false));
+            }
             default: {
               return Promise.reject(new Error('Trying to run query on unknown index: ' + indexName));
             }
@@ -335,6 +391,9 @@ function createTableClient<TItem, TAddArgs, TPutArgs, TDeleteArgs, TGetArgs, TIn
         isEqualTo(query) {
           switch (indexName) {
             case 'date': {
+              return executeQuery(store, IDBKeyRange.only(query));
+            }
+            case 'dayMonthKey': {
               return executeQuery(store, IDBKeyRange.only(query));
             }
             default: {
@@ -359,6 +418,10 @@ function createTableClient<TItem, TAddArgs, TPutArgs, TDeleteArgs, TGetArgs, TIn
         let DBGetRequest: IDBRequest | null = null;
         switch (indexName) {
           case 'date': {
+            DBGetRequest = store.getAll(undefined, options?.count);
+            break;
+          }
+          case 'dayMonthKey': {
             DBGetRequest = store.getAll(undefined, options?.count);
             break;
           }
@@ -443,17 +506,6 @@ function createDatabaseClient(db: IDBDatabase): DaynotedataClient {
 
 export function init(): Promise<DaynotedataClient> {
   return new Promise((resolve, reject) => {
-    function createObjectStore(db: IDBDatabase, storeName: string, options: IDBObjectStoreParameters): IDBObjectStore {
-      if (DBOpenRequest.transaction == null) {
-        throw new Error('Error opening database. Open request transaction is null.');
-      }
-      if (db.objectStoreNames.contains(storeName)) {
-        return DBOpenRequest.transaction.objectStore(storeName);
-      } else {
-        return db.createObjectStore(storeName, options);
-      }
-    }
-
     function removeUnusedIndexes(store: IDBObjectStore, indexNames: ReadonlyArray<string>): void {
       for (const indexName of Array.from(store.indexNames)) {
         if (indexNames.includes(indexName) === false) {
@@ -462,7 +514,7 @@ export function init(): Promise<DaynotedataClient> {
       }
     }
 
-    const DBOpenRequest = window.indexedDB.open('daynotedata', 1);
+    const DBOpenRequest = window.indexedDB.open('daynotedata', 2);
 
     DBOpenRequest.onerror = () => {
       reject(new Error('Error opening database: daynotedata'));
@@ -473,12 +525,48 @@ export function init(): Promise<DaynotedataClient> {
       resolve(createDatabaseClient(db));
     };
 
-    DBOpenRequest.onupgradeneeded = () => {
+    DBOpenRequest.onupgradeneeded = event => {
       const db = DBOpenRequest.result;
-      const notesStore = createObjectStore(db, 'notes', { keyPath: 'date' });
+      const transaction = DBOpenRequest.transaction;
+
+      if (transaction == null) {
+        throw new Error('Error opening database. Open request transaction is null.');
+      }
+
+      const notesStore = db.objectStoreNames.contains('notes')
+        ? transaction.objectStore('notes')
+        : db.createObjectStore('notes', { keyPath: 'date' });
       removeUnusedIndexes(notesStore, []);
-      const anniversariesStore = createObjectStore(db, 'anniversaries', { keyPath: 'date' });
-      removeUnusedIndexes(anniversariesStore, []);
+
+      if (event.oldVersion < 2) {
+        if (db.objectStoreNames.contains('anniversaries')) {
+          const legacyStore = transaction.objectStore('anniversaries');
+          const legacyRowsRequest = legacyStore.getAll();
+
+          legacyRowsRequest.onsuccess = () => {
+            const legacyRows = (legacyRowsRequest.result ?? []) as LegacyAnniversary[];
+            const migratedRows = migrateLegacyAnniversaries(legacyRows);
+
+            db.deleteObjectStore('anniversaries');
+            const anniversariesStore = db.createObjectStore('anniversaries', { keyPath: 'dayMonthKey' });
+            removeUnusedIndexes(anniversariesStore, []);
+
+            for (const row of migratedRows) {
+              anniversariesStore.put(row);
+            }
+          };
+
+          legacyRowsRequest.onerror = () => {
+            reject(legacyRowsRequest.error ?? new Error('Failed to read legacy anniversaries data.'));
+          };
+        } else {
+          const anniversariesStore = db.createObjectStore('anniversaries', { keyPath: 'dayMonthKey' });
+          removeUnusedIndexes(anniversariesStore, []);
+        }
+      } else {
+        const anniversariesStore = transaction.objectStore('anniversaries');
+        removeUnusedIndexes(anniversariesStore, []);
+      }
     };
   });
 }

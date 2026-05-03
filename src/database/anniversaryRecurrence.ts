@@ -1,30 +1,27 @@
 import { DaynotedataClient } from './index';
-import { anniversary } from './anniversaries';
+import { RecurringAnniversary, anniversaryItem, getDayMonthKeyFromDate } from './anniversaries';
 
-const isSameMonthAndDay = (sourceDate: Date, targetDate: Date) => {
-  return sourceDate.getMonth() === targetDate.getMonth() && sourceDate.getDate() === targetDate.getDate();
-};
-
-export async function getRecurringAnniversaryForDate(database: DaynotedataClient, date: Date): Promise<anniversary> {
+export async function getRecurringAnniversaryForDate(
+  database: DaynotedataClient,
+  date: Date,
+): Promise<RecurringAnniversary> {
   const dateWithoutTime = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const candidates = await database.anniversaries.where('date').isLessThanOrEqualTo(dateWithoutTime.valueOf());
+  const dayMonthKey = getDayMonthKeyFromDate(dateWithoutTime);
+  const currentYear = dateWithoutTime.getFullYear();
 
-  const matchingAnniversaries: Array<anniversary> = [];
-  for (const candidate of candidates) {
-    const candidateDate = new Date(candidate.date);
-    if (!isSameMonthAndDay(candidateDate, dateWithoutTime)) {
-      continue;
-    }
+  const entry = await database.anniversaries.get(dayMonthKey).catch(() => undefined);
+  const matchingItems: anniversaryItem[] = (entry?.items ?? [])
+    .filter(item => item.year === undefined || item.year <= currentYear)
+    .sort((left, right) => {
+      const leftYear = left.year ?? Number.MIN_SAFE_INTEGER;
+      const rightYear = right.year ?? Number.MIN_SAFE_INTEGER;
+      return leftYear - rightYear;
+    });
 
-    matchingAnniversaries.push(candidate);
-  }
-
-  matchingAnniversaries.sort((a, b) => a.date - b.date);
-
-  const combinedNote = matchingAnniversaries
+  const combinedNote = matchingItems
     .map(item => item.note.trim())
     .filter(item => item.length > 0)
     .join(', ');
 
-  return { date: dateWithoutTime.valueOf(), note: combinedNote };
+  return { dayMonthKey, items: matchingItems, note: combinedNote };
 }

@@ -3,7 +3,7 @@ import { Params, useLoaderData, useNavigate } from 'react-router-dom';
 import { BottomNavigation, BottomNavigationAction, Paper, Typography, Stack, Divider, TextField } from '@mui/material';
 import { DaynotedataClient, init } from '../database';
 import { note } from '../database/notes';
-import { anniversary } from '../database/anniversaries';
+import { RecurringAnniversary, getDayMonthKeyFromDate } from '../database/anniversaries';
 import { getRecurringAnniversaryForDate } from '../database/anniversaryRecurrence';
 import { subscribeToImportCompletedSignal } from '../database/importSignal';
 import { getWeekNumber } from '../Week/DateExtensions';
@@ -32,7 +32,11 @@ const Day: React.FC = () => {
   const [database, setDatabase] = useState<DaynotedataClient>();
   const dateWithoutTime = useMemo(() => new Date(date.getFullYear(), date.getMonth(), date.getDate()), [date]);
   const [noteData, setNoteData] = useState<note>({ date: date.valueOf(), note: '', photo: '' });
-  const [anniversaryData, setAnniversaryData] = useState<anniversary>({ date: dateWithoutTime.valueOf(), note: '' });
+  const [anniversaryData, setAnniversaryData] = useState<RecurringAnniversary>({
+    dayMonthKey: getDayMonthKeyFromDate(dateWithoutTime),
+    items: [],
+    note: '',
+  });
 
   const config: ImagePickerConf = {
     borderRadius: '8px',
@@ -78,12 +82,43 @@ const Day: React.FC = () => {
   const handleAnniversaryChange = useCallback(
     (value: string) => {
       if (database) {
+        const normalizedValue = value.trim();
+        const dayMonthKey = getDayMonthKeyFromDate(dateWithoutTime);
+        const currentYear = dateWithoutTime.getFullYear();
         database.anniversaries
-          .put({ date: dateWithoutTime.valueOf(), note: value })
-          .then(a => setAnniversaryData(a))
+          .get(dayMonthKey)
+          .catch(() => undefined)
+          .then(existing => {
+            const yearSpecificItems = (existing?.items ?? []).filter(item => item.year !== undefined);
+            const updatedItems =
+              normalizedValue.length === 0 ? yearSpecificItems : [{ note: value }, ...yearSpecificItems];
+
+            if (updatedItems.length === 0) {
+              return database.anniversaries.delete(dayMonthKey).then(() => ({ dayMonthKey, items: [], note: '' }));
+            }
+
+            return database.anniversaries.put({ dayMonthKey, items: updatedItems }).then(() => {
+              const visibleItems = updatedItems.filter(item => item.year === undefined || item.year <= currentYear);
+              const visibleNote = visibleItems
+                .map(item => item.note.trim())
+                .filter(item => item.length > 0)
+                .join(', ');
+
+              return {
+                dayMonthKey,
+                items: visibleItems,
+                note: visibleNote,
+              };
+            });
+          })
+          .then(updated => setAnniversaryData(updated))
           .catch(e => {
             console.error(e);
-            setAnniversaryData({ date: dateWithoutTime.valueOf(), note: '' });
+            setAnniversaryData({
+              dayMonthKey,
+              items: [],
+              note: '',
+            });
           });
       }
     },
