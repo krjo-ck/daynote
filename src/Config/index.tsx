@@ -8,6 +8,9 @@ import {
   Divider,
   Button,
   Alert,
+  Checkbox,
+  FormControlLabel,
+  TextField,
 } from '@mui/material';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
@@ -19,8 +22,10 @@ import MenuItem from '@mui/material/MenuItem';
 import Select, { SelectChangeEvent } from '@mui/material/Select';
 import { DaynotedataClient, init } from '../database';
 import {
+  applyDateOffset,
   analyzeImportPayload,
   buildExportPayload,
+  clearAllData,
   DatabaseTransferPayload,
   ImportConflictSummary,
   ImportMode,
@@ -38,6 +43,7 @@ export async function loader() {
 type PendingImport = {
   fileName: string;
   format: 'json' | 'legacy-xml';
+  basePayload: DatabaseTransferPayload;
   payload: DatabaseTransferPayload;
   summary: ImportConflictSummary;
 };
@@ -65,6 +71,9 @@ const Config: React.FC = () => {
   const [isImporting, setIsImporting] = useState(false);
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
   const [importMode, setImportMode] = useState<ImportMode>('ignore');
+  const [legacyDateOffsetDays, setLegacyDateOffsetDays] = useState(0);
+  const [deleteDataBeforeImport, setDeleteDataBeforeImport] = useState(false);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [status, setStatus] = useState<Status | null>(null);
 
   const today = useMemo(() => new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()), []);
@@ -132,18 +141,54 @@ const Config: React.FC = () => {
       const lowerCaseFileName = file.name.toLowerCase();
       const detectedFormat: PendingImport['format'] =
         trimmedFileText.startsWith('<') || lowerCaseFileName.endsWith('.xml') ? 'legacy-xml' : 'json';
-      const payload = parseImportPayload(fileText, { fileName: file.name });
+      const parsedPayload = parseImportPayload(fileText, { fileName: file.name });
+      const payload = detectedFormat === 'legacy-xml' ? applyDateOffset(parsedPayload, 0) : parsedPayload;
       const summary = await analyzeImportPayload(database, payload);
 
       setPendingImport({
         fileName: file.name,
         format: detectedFormat,
+        basePayload: parsedPayload,
         payload,
         summary,
       });
       setImportMode('ignore');
+      setLegacyDateOffsetDays(0);
+      setDeleteDataBeforeImport(false);
+      setShowDeleteConfirmation(false);
     } catch (error) {
       setStatus({ severity: 'error', message: `Import file validation failed: ${String(error)}` });
+    }
+  };
+
+  const handleLegacyDateOffsetChange: React.ChangeEventHandler<
+    HTMLInputElement | HTMLTextAreaElement
+  > = async event => {
+    const nextValue = Number(event.target.value);
+    const offset = Number.isFinite(nextValue) ? Math.trunc(nextValue) : 0;
+    setLegacyDateOffsetDays(offset);
+
+    if (!database || !pendingImport || pendingImport.format !== 'legacy-xml') {
+      return;
+    }
+
+    try {
+      const adjustedPayload = applyDateOffset(pendingImport.basePayload, offset);
+      const adjustedSummary = await analyzeImportPayload(database, adjustedPayload);
+
+      setPendingImport(current => {
+        if (current === null || current.format !== 'legacy-xml') {
+          return current;
+        }
+
+        return {
+          ...current,
+          payload: adjustedPayload,
+          summary: adjustedSummary,
+        };
+      });
+    } catch (error) {
+      setStatus({ severity: 'error', message: `Unable to apply date offset: ${String(error)}` });
     }
   };
 
@@ -157,9 +202,12 @@ const Config: React.FC = () => {
     }
 
     setPendingImport(null);
+    setLegacyDateOffsetDays(0);
+    setDeleteDataBeforeImport(false);
+    setShowDeleteConfirmation(false);
   };
 
-  const handleConfirmImport = async () => {
+  const runImport = async (clearBeforeImport: boolean) => {
     if (!database || !pendingImport) {
       return;
     }
@@ -168,11 +216,16 @@ const Config: React.FC = () => {
     setStatus(null);
 
     try {
+      if (clearBeforeImport) {
+        await clearAllData(database);
+      }
+
       const report = await importPayload(database, pendingImport.payload, importMode);
       emitImportCompletedSignal();
       setStatus({
         severity: 'success',
         message:
+          `${clearBeforeImport ? 'Existing data was deleted before import. ' : ''}` +
           `Import completed. Notes: +${report.notes.inserted} inserted, ` +
           `${report.notes.updated} overwritten, ${report.notes.merged} merged, ${report.notes.skipped} skipped. ` +
           `Anniversaries: +${report.anniversaries.inserted} inserted, ${report.anniversaries.updated} overwritten, ` +
@@ -184,6 +237,20 @@ const Config: React.FC = () => {
     } finally {
       setIsImporting(false);
     }
+  };
+
+  const handleConfirmImport = async () => {
+    if (deleteDataBeforeImport) {
+      setShowDeleteConfirmation(true);
+      return;
+    }
+
+    await runImport(false);
+  };
+
+  const handleConfirmDeleteAndImport = async () => {
+    setShowDeleteConfirmation(false);
+    await runImport(true);
   };
 
   return (
@@ -246,6 +313,18 @@ const Config: React.FC = () => {
                 Detected legacy XML format. The data will be converted and imported into the current Daynote format.
               </Alert>
             )}
+            {pendingImport?.format === 'legacy-xml' && (
+              <TextField
+                type="number"
+                label="Legacy date offset (days)"
+                value={legacyDateOffsetDays}
+                onChange={handleLegacyDateOffsetChange}
+                disabled={isImporting}
+                slotProps={{ htmlInput: { step: 1 } }}
+                helperText="Use positive or negative values to shift imported legacy dates."
+                fullWidth
+              />
+            )}
             <Typography variant="body2">
               Notes: {pendingImport?.summary.noteTotal} total, {pendingImport?.summary.duplicateNotes} duplicates,{' '}
               {pendingImport?.summary.newNotes} new
@@ -262,13 +341,28 @@ const Config: React.FC = () => {
                 value={importMode}
                 label="Duplicate handling"
                 onChange={handleModeChange}
-                disabled={isImporting}
+                disabled={isImporting || deleteDataBeforeImport}
               >
                 <MenuItem value="overwrite">Overwrite existing entries</MenuItem>
                 <MenuItem value="ignore">Ignore duplicates from file</MenuItem>
                 <MenuItem value="append-merge">Append by merging into existing entries</MenuItem>
               </Select>
             </FormControl>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={deleteDataBeforeImport}
+                  onChange={event => setDeleteDataBeforeImport(event.target.checked)}
+                  disabled={isImporting}
+                />
+              }
+              label="Delete all existing data before import"
+            />
+            {deleteDataBeforeImport && (
+              <Alert severity="warning">
+                All existing notes and anniversaries will be deleted before importing this file.
+              </Alert>
+            )}
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -277,6 +371,31 @@ const Config: React.FC = () => {
           </Button>
           <Button onClick={handleConfirmImport} disabled={isImporting} variant="contained">
             {isImporting ? 'Importing...' : 'Import'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={showDeleteConfirmation && pendingImport !== null}
+        onClose={() => (isImporting ? undefined : setShowDeleteConfirmation(false))}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Confirm destructive import</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Alert severity="warning">
+              This will permanently delete all existing notes and anniversaries before importing.
+            </Alert>
+            <Typography variant="body2">File: {pendingImport?.fileName}</Typography>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowDeleteConfirmation(false)} disabled={isImporting}>
+            Cancel
+          </Button>
+          <Button onClick={handleConfirmDeleteAndImport} disabled={isImporting} color="error" variant="contained">
+            Delete all and import
           </Button>
         </DialogActions>
       </Dialog>

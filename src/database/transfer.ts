@@ -82,6 +82,13 @@ function waitForTransactionCompletion(transaction: IDBTransaction): Promise<void
   });
 }
 
+function waitForRequestCompletion(request: IDBRequest): Promise<void> {
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error ?? new Error('Database request failed.'));
+  });
+}
+
 export async function buildExportPayload(client: DaynotedataClient): Promise<DatabaseTransferPayload> {
   const [notes, anniversaries] = await Promise.all([client.notes.sortBy('date'), client.anniversaries.sortBy('date')]);
 
@@ -221,6 +228,49 @@ export function parseImportPayload(
   }
 
   return validateImportPayload(parsedPayload);
+}
+
+export function applyDateOffset(payload: DatabaseTransferPayload, offsetDays: number): DatabaseTransferPayload {
+  const parsedOffsetDays = Number.isFinite(offsetDays) ? Math.trunc(offsetDays) : 0;
+
+  if (parsedOffsetDays === 0) {
+    return {
+      schemaVersion: payload.schemaVersion,
+      exportedAt: payload.exportedAt,
+      notes: payload.notes.map(item => ({ ...item })),
+      anniversaries: payload.anniversaries.map(item => ({ ...item })),
+    };
+  }
+
+  const offsetMilliseconds = parsedOffsetDays * 24 * 60 * 60 * 1000;
+
+  return {
+    schemaVersion: payload.schemaVersion,
+    exportedAt: payload.exportedAt,
+    notes: payload.notes
+      .map(item => ({
+        ...item,
+        date: item.date + offsetMilliseconds,
+      }))
+      .sort((left, right) => left.date - right.date),
+    anniversaries: payload.anniversaries
+      .map(item => ({
+        ...item,
+        date: item.date + offsetMilliseconds,
+      }))
+      .sort((left, right) => left.date - right.date),
+  };
+}
+
+export async function clearAllData(client: DaynotedataClient): Promise<void> {
+  const transaction = client.transaction(['notes', 'anniversaries'], 'readwrite');
+  const transactionCompleted = waitForTransactionCompletion(transaction);
+
+  const notesClearRequest = transaction.objectStore('notes').clear();
+  const anniversariesClearRequest = transaction.objectStore('anniversaries').clear();
+
+  await Promise.all([waitForRequestCompletion(notesClearRequest), waitForRequestCompletion(anniversariesClearRequest)]);
+  await transactionCompleted;
 }
 
 export function validateImportPayload(payload: unknown): DatabaseTransferPayload {
