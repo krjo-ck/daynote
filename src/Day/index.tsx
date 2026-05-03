@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Params, useLoaderData } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Params, useLoaderData, useNavigate } from 'react-router-dom';
 import { BottomNavigation, BottomNavigationAction, Paper, Typography, Stack, Divider, TextField } from '@mui/material';
 import { DaynotedataClient, init } from '../database';
 import { note } from '../database/notes';
@@ -14,6 +14,11 @@ export async function loader({ params }: { params: Params }) {
 
 const Day: React.FC = () => {
   const { day } = useLoaderData() as { day: string };
+  const navigate = useNavigate();
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+  const pointerStartX = useRef<number | null>(null);
+  const pointerStartY = useRef<number | null>(null);
   const date = useMemo(() => new Date(Number(day)), [day]);
 
   const currentWeek = useMemo(() => `${date.getFullYear()}w${getWeekNumber(date)}`, [date]);
@@ -102,8 +107,102 @@ const Day: React.FC = () => {
     [database, dateWithoutTime, noteData.note],
   );
 
+  const minSwipeDistance = 50;
+
+  const shouldIgnoreGestureTarget = (target: EventTarget | null) => {
+    if (!(target instanceof Element)) {
+      return false;
+    }
+
+    return Boolean(target.closest('input, textarea, select, button, a, [contenteditable="true"]'));
+  };
+
+  const handleGestureEnd = (endX: number, endY: number, startX: number, startY: number) => {
+    const deltaX = endX - startX;
+    const deltaY = endY - startY;
+
+    if (Math.abs(deltaX) < minSwipeDistance || Math.abs(deltaX) <= Math.abs(deltaY)) {
+      return;
+    }
+
+    if (deltaX < 0) {
+      navigate(`/day/${nextDay}`);
+      return;
+    }
+
+    navigate(`/day/${previousDay}`);
+  };
+
+  const handleTouchStart: React.TouchEventHandler<HTMLDivElement> = event => {
+    if (shouldIgnoreGestureTarget(event.target)) {
+      return;
+    }
+
+    const touch = event.changedTouches[0];
+    touchStartX.current = touch.clientX;
+    touchStartY.current = touch.clientY;
+  };
+
+  const handleTouchEnd: React.TouchEventHandler<HTMLDivElement> = event => {
+    if (touchStartX.current === null || touchStartY.current === null) {
+      return;
+    }
+
+    const touch = event.changedTouches[0];
+    const startX = touchStartX.current;
+    const startY = touchStartY.current;
+
+    touchStartX.current = null;
+    touchStartY.current = null;
+
+    handleGestureEnd(touch.clientX, touch.clientY, startX, startY);
+  };
+
+  const handlePointerDown: React.PointerEventHandler<HTMLDivElement> = event => {
+    if (event.pointerType === 'touch' || shouldIgnoreGestureTarget(event.target)) {
+      return;
+    }
+
+    if (event.pointerType === 'mouse' && event.button !== 0) {
+      return;
+    }
+
+    pointerStartX.current = event.clientX;
+    pointerStartY.current = event.clientY;
+  };
+
+  const handlePointerUp: React.PointerEventHandler<HTMLDivElement> = event => {
+    if (event.pointerType === 'touch') {
+      return;
+    }
+
+    if (pointerStartX.current === null || pointerStartY.current === null) {
+      return;
+    }
+
+    const startX = pointerStartX.current;
+    const startY = pointerStartY.current;
+
+    pointerStartX.current = null;
+    pointerStartY.current = null;
+
+    handleGestureEnd(event.clientX, event.clientY, startX, startY);
+  };
+
+  const handlePointerCancel: React.PointerEventHandler<HTMLDivElement> = () => {
+    pointerStartX.current = null;
+    pointerStartY.current = null;
+  };
+
   return (
-    <Stack sx={{ alignItems: 'center', height: '100%', width: '100%' }}>
+    <Stack
+      sx={{ alignItems: 'center', height: '100%', width: '100%' }}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
+    >
       <Paper sx={{ width: '100%', borderRadius: 0 }} elevation={0}>
         <Stack direction="row" sx={{ alignItems: 'center', width: '100%' }}>
           <BottomNavigationAction
