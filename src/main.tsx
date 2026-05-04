@@ -11,6 +11,7 @@ import ErrorPage from './ErrorPage';
 import Week, { loader as weekLoader } from './Week';
 import Day, { loader as dayLoader } from './Day';
 import Config, { loader as configLoader } from './Config';
+import { registerServiceWorker } from './serviceWorkerRegistration';
 
 const router = createBrowserRouter([
   {
@@ -53,3 +54,5 @@ root.render(
     <RouterProvider router={router} />
   </React.StrictMode>,
 );
+
+registerServiceWorker();
