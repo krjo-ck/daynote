@@ -17,6 +17,10 @@ import {
   IconButton,
 } from '@mui/material';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
+import NavigateNextIcon from '@mui/icons-material/NavigateNext';
+import SettingsIcon from '@mui/icons-material/Settings';
+import TodayIcon from '@mui/icons-material/Today';
 import { getLastWeekNumberOfYear, getWeekNumber, getWeekDates } from './DateExtensions';
 import DayRow from './DayRow';
 
@@ -181,7 +185,13 @@ const Week: React.FC = () => {
               <CalendarMonthIcon fontSize="small" />
             </IconButton>
           </Stack>
-          <BottomNavigationAction label="Settings" href="/config" showLabel style={{ maxWidth: '88px' }} />
+          <BottomNavigationAction
+            label="Settings"
+            href="/config"
+            showLabel
+            icon={<SettingsIcon />}
+            style={{ maxWidth: '88px' }}
+          />
         </Stack>
       </Paper>
       <Dialog open={goToDateOpen} onClose={() => setGoToDateOpen(false)}>
@@ -217,9 +227,9 @@ const Week: React.FC = () => {
       <Divider orientation="horizontal" variant="fullWidth" sx={{ width: '100%' }} />
       <Paper sx={{ width: '100%', borderRadius: 0 }} elevation={0}>
         <BottomNavigation showLabels>
-          <BottomNavigationAction label={previousWeek} href={`/week/${previousWeek}`} />
-          <BottomNavigationAction label="Today" href={`/week/${today}`} />
-          <BottomNavigationAction label={nextWeek} href={`/week/${nextWeek}`} />
+          <BottomNavigationAction label={previousWeek} href={`/week/${previousWeek}`} icon={<NavigateBeforeIcon />} />
+          <BottomNavigationAction label="Today" href={`/week/${today}`} icon={<TodayIcon />} />
+          <BottomNavigationAction label={nextWeek} href={`/week/${nextWeek}`} icon={<NavigateNextIcon />} />
         </BottomNavigation>
       </Paper>
     </Stack>

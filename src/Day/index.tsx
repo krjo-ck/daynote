@@ -21,6 +21,11 @@ import {
   IconButton,
 } from '@mui/material';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
+import NavigateNextIcon from '@mui/icons-material/NavigateNext';
+import SettingsIcon from '@mui/icons-material/Settings';
+import TodayIcon from '@mui/icons-material/Today';
+import ViewWeekIcon from '@mui/icons-material/ViewWeek';
 import { DaynotedataClient, init } from '../database';
 import { note } from '../database/notes';
 import { anniversaryItem, getDayMonthKeyFromDate } from '../database/anniversaries';
@@ -453,6 +458,7 @@ const Day: React.FC = () => {
             label={currentWeek}
             href={`/week/${currentWeek}`}
             showLabel
+            icon={<ViewWeekIcon />}
             style={{ maxWidth: '80px' }}
           />
           <Stack direction="row" sx={{ flex: '1 1 auto', alignItems: 'center', justifyContent: 'center' }}>
@@ -463,7 +469,13 @@ const Day: React.FC = () => {
               <CalendarMonthIcon fontSize="small" />
             </IconButton>
           </Stack>
-          <BottomNavigationAction label="Settings" href="/config" showLabel style={{ maxWidth: '80px' }} />
+          <BottomNavigationAction
+            label="Settings"
+            href="/config"
+            showLabel
+            icon={<SettingsIcon />}
+            style={{ maxWidth: '80px' }}
+          />
         </Stack>
       </Paper>
       <Dialog open={goToDateOpen} onClose={() => setGoToDateOpen(false)}>
@@ -633,9 +645,17 @@ const Day: React.FC = () => {
       <Divider orientation="horizontal" variant="fullWidth" sx={{ width: '100%' }} />
       <Paper sx={{ width: '100%', borderRadius: 0 }} elevation={0}>
         <BottomNavigation showLabels>
-          <BottomNavigationAction label={new Date(previousDay).toLocaleDateString()} href={`/day/${previousDay}`} />
-          <BottomNavigationAction label="Today" href={`/day/${today.valueOf()}`} />
-          <BottomNavigationAction label={new Date(nextDay).toLocaleDateString()} href={`/day/${nextDay}`} />
+          <BottomNavigationAction
+            label={new Date(previousDay).toLocaleDateString()}
+            href={`/day/${previousDay}`}
+            icon={<NavigateBeforeIcon />}
+          />
+          <BottomNavigationAction label="Today" href={`/day/${today.valueOf()}`} icon={<TodayIcon />} />
+          <BottomNavigationAction
+            label={new Date(nextDay).toLocaleDateString()}
+            href={`/day/${nextDay}`}
+            icon={<NavigateNextIcon />}
+          />
         </BottomNavigation>
       </Paper>
     </Stack>
