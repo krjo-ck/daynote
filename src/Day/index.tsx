@@ -14,7 +14,18 @@ import {
   FormControlLabel,
   Checkbox,
   Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  IconButton,
 } from '@mui/material';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
+import NavigateNextIcon from '@mui/icons-material/NavigateNext';
+import SettingsIcon from '@mui/icons-material/Settings';
+import TodayIcon from '@mui/icons-material/Today';
+import ViewWeekIcon from '@mui/icons-material/ViewWeek';
 import { DaynotedataClient, init } from '../database';
 import { note } from '../database/notes';
 import { anniversaryItem, getDayMonthKeyFromDate } from '../database/anniversaries';
@@ -54,6 +65,24 @@ const Day: React.FC = () => {
   const [editingAnniversaryNote, setEditingAnniversaryNote] = useState<string>('');
   const [isEditingAnniversaryYearEnabled, setIsEditingAnniversaryYearEnabled] = useState<boolean>(false);
   const [editingAnniversaryYear, setEditingAnniversaryYear] = useState<string>('');
+
+  const [goToDateOpen, setGoToDateOpen] = useState(false);
+  const [goToDateValue, setGoToDateValue] = useState('');
+
+  const handleOpenGoToDate = () => {
+    const d = dateWithoutTime;
+    setGoToDateValue(
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+    );
+    setGoToDateOpen(true);
+  };
+
+  const handleGoToDate = () => {
+    if (!goToDateValue) return;
+    const d = new Date(`${goToDateValue}T00:00:00`);
+    setGoToDateOpen(false);
+    navigate(`/day/${d.valueOf()}`);
+  };
 
   const config: ImagePickerConf = {
     borderRadius: '8px',
@@ -429,14 +458,46 @@ const Day: React.FC = () => {
             label={currentWeek}
             href={`/week/${currentWeek}`}
             showLabel
+            icon={<ViewWeekIcon />}
             style={{ maxWidth: '80px' }}
           />
-          <Typography variant="h6" sx={{ m: 1, textAlign: 'center', flex: '1 1 auto' }}>
-            {date.toLocaleDateString()}
-          </Typography>
-          <BottomNavigationAction label="Settings" href="/config" showLabel style={{ maxWidth: '80px' }} />
+          <Stack direction="row" sx={{ flex: '1 1 auto', alignItems: 'center', justifyContent: 'center' }}>
+            <Typography variant="h6" sx={{ m: 1, textAlign: 'center' }}>
+              {date.toLocaleDateString()}
+            </Typography>
+            <IconButton size="small" onClick={handleOpenGoToDate} aria-label="Go to date">
+              <CalendarMonthIcon fontSize="small" />
+            </IconButton>
+          </Stack>
+          <BottomNavigationAction
+            label="Settings"
+            href="/config"
+            showLabel
+            icon={<SettingsIcon />}
+            style={{ maxWidth: '80px' }}
+          />
         </Stack>
       </Paper>
+      <Dialog open={goToDateOpen} onClose={() => setGoToDateOpen(false)}>
+        <DialogTitle>Go to date</DialogTitle>
+        <DialogContent>
+          <TextField
+            type="date"
+            label="Date"
+            value={goToDateValue}
+            onChange={e => setGoToDateValue(e.target.value)}
+            slotProps={{ inputLabel: { shrink: true } }}
+            fullWidth
+            sx={{ mt: 1 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setGoToDateOpen(false)}>Cancel</Button>
+          <Button onClick={handleGoToDate} variant="contained" disabled={!goToDateValue}>
+            Go
+          </Button>
+        </DialogActions>
+      </Dialog>
       <Divider orientation="horizontal" variant="fullWidth" sx={{ width: '100%' }} />
       <Stack sx={{ alignItems: 'center', height: '100%', width: '100%', p: 1 }}>
         <Typography variant="subtitle1" sx={{ alignSelf: 'flex-start', mt: 0.5 }}>
@@ -584,9 +645,17 @@ const Day: React.FC = () => {
       <Divider orientation="horizontal" variant="fullWidth" sx={{ width: '100%' }} />
       <Paper sx={{ width: '100%', borderRadius: 0 }} elevation={0}>
         <BottomNavigation showLabels>
-          <BottomNavigationAction label={new Date(previousDay).toLocaleDateString()} href={`/day/${previousDay}`} />
-          <BottomNavigationAction label="Today" href={`/day/${today.valueOf()}`} />
-          <BottomNavigationAction label={new Date(nextDay).toLocaleDateString()} href={`/day/${nextDay}`} />
+          <BottomNavigationAction
+            label={new Date(previousDay).toLocaleDateString()}
+            href={`/day/${previousDay}`}
+            icon={<NavigateBeforeIcon />}
+          />
+          <BottomNavigationAction label="Today" href={`/day/${today.valueOf()}`} icon={<TodayIcon />} />
+          <BottomNavigationAction
+            label={new Date(nextDay).toLocaleDateString()}
+            href={`/day/${nextDay}`}
+            icon={<NavigateNextIcon />}
+          />
         </BottomNavigation>
       </Paper>
     </Stack>
