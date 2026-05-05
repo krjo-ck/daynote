@@ -1,6 +1,22 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { Params, useLoaderData, useNavigate } from 'react-router-dom';
-import { BottomNavigation, BottomNavigationAction, Paper, Typography, Stack, Divider, Box } from '@mui/material';
+import {
+  BottomNavigation,
+  BottomNavigationAction,
+  Paper,
+  Typography,
+  Stack,
+  Divider,
+  Box,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  TextField,
+  IconButton,
+} from '@mui/material';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import { getLastWeekNumberOfYear, getWeekNumber, getWeekDates } from './DateExtensions';
 import DayRow from './DayRow';
 
@@ -19,6 +35,25 @@ const Week: React.FC = () => {
   const [year, weekNo] = week.split('w').map(v => Number(v));
   const weekDates = getWeekDates(year, weekNo);
   const month = weekDates[0].toLocaleString('default', { month: 'long' });
+
+  const [goToDateOpen, setGoToDateOpen] = useState(false);
+  const [goToDateValue, setGoToDateValue] = useState('');
+
+  const handleOpenGoToDate = () => {
+    const d = weekDates[0];
+    setGoToDateValue(
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+    );
+    setGoToDateOpen(true);
+  };
+
+  const handleGoToDate = () => {
+    if (!goToDateValue) return;
+    const d = new Date(`${goToDateValue}T00:00:00`);
+    const targetWeek = `${d.getFullYear()}w${getWeekNumber(d)}`;
+    setGoToDateOpen(false);
+    navigate(`/week/${targetWeek}`);
+  };
 
   const previousWeek = useMemo(() => {
     if (weekNo > 1) {
@@ -138,12 +173,37 @@ const Week: React.FC = () => {
       <Paper sx={{ width: '100%', borderRadius: 0 }} elevation={0}>
         <Stack direction="row" sx={{ alignItems: 'center', width: '100%' }}>
           <Box sx={{ width: 88, flexShrink: 0 }} />
-          <Typography variant="h6" sx={{ m: 1, textAlign: 'center', flex: '1 1 auto' }}>
-            {month} {week}
-          </Typography>
+          <Stack direction="row" sx={{ flex: '1 1 auto', alignItems: 'center', justifyContent: 'center' }}>
+            <Typography variant="h6" sx={{ m: 1, textAlign: 'center' }}>
+              {month} {week}
+            </Typography>
+            <IconButton size="small" onClick={handleOpenGoToDate} aria-label="Go to date">
+              <CalendarMonthIcon fontSize="small" />
+            </IconButton>
+          </Stack>
           <BottomNavigationAction label="Settings" href="/config" showLabel style={{ maxWidth: '88px' }} />
         </Stack>
       </Paper>
+      <Dialog open={goToDateOpen} onClose={() => setGoToDateOpen(false)}>
+        <DialogTitle>Go to week</DialogTitle>
+        <DialogContent>
+          <TextField
+            type="date"
+            label="Date"
+            value={goToDateValue}
+            onChange={e => setGoToDateValue(e.target.value)}
+            slotProps={{ inputLabel: { shrink: true } }}
+            fullWidth
+            sx={{ mt: 1 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setGoToDateOpen(false)}>Cancel</Button>
+          <Button onClick={handleGoToDate} variant="contained" disabled={!goToDateValue}>
+            Go
+          </Button>
+        </DialogActions>
+      </Dialog>
       <Divider orientation="horizontal" variant="fullWidth" sx={{ width: '100%' }} />
       <Stack sx={{ alignItems: 'center', justifyContent: 'space-evenly', height: '100%' }}>
         <DayRow key="monday" date={weekDates[0]} />
