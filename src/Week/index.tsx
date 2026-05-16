@@ -21,6 +21,7 @@ import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import SettingsIcon from '@mui/icons-material/Settings';
 import TodayIcon from '@mui/icons-material/Today';
+import SearchIcon from '@mui/icons-material/Search';
 import { getLastWeekNumberOfYear, getWeekNumber, getWeekDates } from './DateExtensions';
 import DayRow from './DayRow';
 import { getDatabase } from '../database';
@@ -217,6 +218,9 @@ const Week: React.FC = () => {
             <IconButton size="small" onClick={handleOpenGoToDate} aria-label="Go to date">
               <CalendarMonthIcon fontSize="small" />
             </IconButton>
+            <IconButton size="small" href="/search" aria-label="Search notes">
+              <SearchIcon fontSize="small" />
+            </IconButton>
           </Stack>
           <BottomNavigationAction
             label="Settings"
@@ -249,13 +253,48 @@ const Week: React.FC = () => {
       </Dialog>
       <Divider orientation="horizontal" variant="fullWidth" sx={{ width: '100%' }} />
       <Stack sx={{ alignItems: 'center', justifyContent: 'space-evenly', height: '100%' }}>
-        <DayRow key="monday" date={weekDates[0]} noteData={weekNotes.get(weekDates[0].valueOf())} anniversaryData={weekAnniversaries.get(getDayMonthKeyFromDate(weekDates[0]))} />
-        <DayRow key="tuesday" date={weekDates[1]} noteData={weekNotes.get(weekDates[1].valueOf())} anniversaryData={weekAnniversaries.get(getDayMonthKeyFromDate(weekDates[1]))} />
-        <DayRow key="wendesday" date={weekDates[2]} noteData={weekNotes.get(weekDates[2].valueOf())} anniversaryData={weekAnniversaries.get(getDayMonthKeyFromDate(weekDates[2]))} />
-        <DayRow key="thursday" date={weekDates[3]} noteData={weekNotes.get(weekDates[3].valueOf())} anniversaryData={weekAnniversaries.get(getDayMonthKeyFromDate(weekDates[3]))} />
-        <DayRow key="friday" date={weekDates[4]} noteData={weekNotes.get(weekDates[4].valueOf())} anniversaryData={weekAnniversaries.get(getDayMonthKeyFromDate(weekDates[4]))} />
-        <DayRow key="saturday" date={weekDates[5]} noteData={weekNotes.get(weekDates[5].valueOf())} anniversaryData={weekAnniversaries.get(getDayMonthKeyFromDate(weekDates[5]))} />
-        <DayRow key="sunday" date={weekDates[6]} noteData={weekNotes.get(weekDates[6].valueOf())} anniversaryData={weekAnniversaries.get(getDayMonthKeyFromDate(weekDates[6]))} />
+        <DayRow
+          key="monday"
+          date={weekDates[0]}
+          noteData={weekNotes.get(weekDates[0].valueOf())}
+          anniversaryData={weekAnniversaries.get(getDayMonthKeyFromDate(weekDates[0]))}
+        />
+        <DayRow
+          key="tuesday"
+          date={weekDates[1]}
+          noteData={weekNotes.get(weekDates[1].valueOf())}
+          anniversaryData={weekAnniversaries.get(getDayMonthKeyFromDate(weekDates[1]))}
+        />
+        <DayRow
+          key="wendesday"
+          date={weekDates[2]}
+          noteData={weekNotes.get(weekDates[2].valueOf())}
+          anniversaryData={weekAnniversaries.get(getDayMonthKeyFromDate(weekDates[2]))}
+        />
+        <DayRow
+          key="thursday"
+          date={weekDates[3]}
+          noteData={weekNotes.get(weekDates[3].valueOf())}
+          anniversaryData={weekAnniversaries.get(getDayMonthKeyFromDate(weekDates[3]))}
+        />
+        <DayRow
+          key="friday"
+          date={weekDates[4]}
+          noteData={weekNotes.get(weekDates[4].valueOf())}
+          anniversaryData={weekAnniversaries.get(getDayMonthKeyFromDate(weekDates[4]))}
+        />
+        <DayRow
+          key="saturday"
+          date={weekDates[5]}
+          noteData={weekNotes.get(weekDates[5].valueOf())}
+          anniversaryData={weekAnniversaries.get(getDayMonthKeyFromDate(weekDates[5]))}
+        />
+        <DayRow
+          key="sunday"
+          date={weekDates[6]}
+          noteData={weekNotes.get(weekDates[6].valueOf())}
+          anniversaryData={weekAnniversaries.get(getDayMonthKeyFromDate(weekDates[6]))}
+        />
       </Stack>
       <Divider orientation="horizontal" variant="fullWidth" sx={{ width: '100%' }} />
       <Paper sx={{ width: '100%', borderRadius: 0 }} elevation={0}>

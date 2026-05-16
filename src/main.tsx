@@ -11,6 +11,7 @@ import ErrorPage from './ErrorPage';
 import Week, { loader as weekLoader } from './Week';
 import Day, { loader as dayLoader } from './Day';
 import Config, { loader as configLoader } from './Config';
+import Search, { loader as searchLoader } from './Search';
 import { registerServiceWorker } from './serviceWorkerRegistration';
 
 const router = createBrowserRouter([
@@ -43,6 +44,11 @@ const router = createBrowserRouter([
         path: 'config',
         element: <Config />,
         loader: configLoader,
+      },
+      {
+        path: 'search',
+        element: <Search />,
+        loader: searchLoader,
       },
     ],
   },
