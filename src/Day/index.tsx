@@ -26,7 +26,7 @@ import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import SettingsIcon from '@mui/icons-material/Settings';
 import TodayIcon from '@mui/icons-material/Today';
 import ViewWeekIcon from '@mui/icons-material/ViewWeek';
-import { DaynotedataClient, init } from '../database';
+import { DaynotedataClient, getDatabase } from '../database';
 import { note } from '../database/notes';
 import { anniversaryItem, getDayMonthKeyFromDate } from '../database/anniversaries';
 import { subscribeToImportCompletedSignal } from '../database/importSignal';
@@ -94,7 +94,7 @@ const Day: React.FC = () => {
   };
 
   useEffect(() => {
-    init()
+    getDatabase()
       .then(db => {
         setDatabase(db);
       })

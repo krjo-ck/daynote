@@ -551,6 +551,15 @@ function createDatabaseClient(db: IDBDatabase): DaynotedataClient {
   };
 }
 
+let _dbPromise: Promise<DaynotedataClient> | null = null;
+
+export function getDatabase(): Promise<DaynotedataClient> {
+  if (_dbPromise === null) {
+    _dbPromise = init();
+  }
+  return _dbPromise;
+}
+
 export function init(): Promise<DaynotedataClient> {
   return new Promise((resolve, reject) => {
     function removeUnusedIndexes(store: IDBObjectStore, indexNames: ReadonlyArray<string>): void {
