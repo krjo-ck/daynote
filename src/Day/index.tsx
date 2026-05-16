@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Params, useLoaderData, useNavigate } from 'react-router-dom';
+import { Params, useLoaderData, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   BottomNavigation,
   BottomNavigationAction,
@@ -26,7 +26,8 @@ import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import SettingsIcon from '@mui/icons-material/Settings';
 import TodayIcon from '@mui/icons-material/Today';
 import ViewWeekIcon from '@mui/icons-material/ViewWeek';
-import { DaynotedataClient, init } from '../database';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import { DaynotedataClient, getDatabase } from '../database';
 import { note } from '../database/notes';
 import { anniversaryItem, getDayMonthKeyFromDate } from '../database/anniversaries';
 import { subscribeToImportCompletedSignal } from '../database/importSignal';
@@ -41,6 +42,8 @@ export async function loader({ params }: { params: Params }) {
 const Day: React.FC = () => {
   const { day } = useLoaderData() as { day: string };
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const backUrl = searchParams.get('back');
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
   const pointerStartX = useRef<number | null>(null);
@@ -94,7 +97,7 @@ const Day: React.FC = () => {
   };
 
   useEffect(() => {
-    init()
+    getDatabase()
       .then(db => {
         setDatabase(db);
       })
@@ -645,11 +648,15 @@ const Day: React.FC = () => {
       <Divider orientation="horizontal" variant="fullWidth" sx={{ width: '100%' }} />
       <Paper sx={{ width: '100%', borderRadius: 0 }} elevation={0}>
         <BottomNavigation showLabels>
-          <BottomNavigationAction
-            label={new Date(previousDay).toLocaleDateString()}
-            href={`/day/${previousDay}`}
-            icon={<NavigateBeforeIcon />}
-          />
+          {backUrl ? (
+            <BottomNavigationAction label="Search results" href={backUrl} icon={<ArrowBackIcon />} />
+          ) : (
+            <BottomNavigationAction
+              label={new Date(previousDay).toLocaleDateString()}
+              href={`/day/${previousDay}`}
+              icon={<NavigateBeforeIcon />}
+            />
+          )}
           <BottomNavigationAction label="Today" href={`/day/${today.valueOf()}`} icon={<TodayIcon />} />
           <BottomNavigationAction
             label={new Date(nextDay).toLocaleDateString()}

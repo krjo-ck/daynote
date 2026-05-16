@@ -20,7 +20,7 @@ import FormControl from '@mui/material/FormControl';
 import InputLabel from '@mui/material/InputLabel';
 import MenuItem from '@mui/material/MenuItem';
 import Select, { SelectChangeEvent } from '@mui/material/Select';
-import { DaynotedataClient, init } from '../database';
+import { DaynotedataClient, getDatabase } from '../database';
 import {
   applyDateOffset,
   analyzeImportPayload,
@@ -80,7 +80,7 @@ const Config: React.FC = () => {
   const currentWeek = useMemo(() => `${today.getFullYear()}w${getWeekNumber(today)}`, [today]);
 
   useEffect(() => {
-    init()
+    getDatabase()
       .then(db => setDatabase(db))
       .catch(error => {
         setStatus({ severity: 'error', message: `Failed to initialize database: ${String(error)}` });

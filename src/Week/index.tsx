@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Params, useLoaderData, useNavigate } from 'react-router-dom';
 import {
   BottomNavigation,
@@ -21,8 +21,14 @@ import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import SettingsIcon from '@mui/icons-material/Settings';
 import TodayIcon from '@mui/icons-material/Today';
+import SearchIcon from '@mui/icons-material/Search';
 import { getLastWeekNumberOfYear, getWeekNumber, getWeekDates } from './DateExtensions';
 import DayRow from './DayRow';
+import { getDatabase } from '../database';
+import { note } from '../database/notes';
+import { RecurringAnniversary, getDayMonthKeyFromDate } from '../database/anniversaries';
+import { getRecurringAnniversaryForDate } from '../database/anniversaryRecurrence';
+import { subscribeToImportCompletedSignal } from '../database/importSignal';
 
 export async function loader({ params }: { params: Params }) {
   const week = params['week'] ?? `${new Date().getFullYear()}w${getWeekNumber(new Date())}`;
@@ -37,11 +43,39 @@ const Week: React.FC = () => {
   const pointerStartX = useRef<number | null>(null);
   const pointerStartY = useRef<number | null>(null);
   const [year, weekNo] = week.split('w').map(v => Number(v));
-  const weekDates = getWeekDates(year, weekNo);
+  const weekDates = useMemo(() => getWeekDates(year, weekNo), [year, weekNo]);
   const month = weekDates[0].toLocaleString('default', { month: 'long' });
 
   const [goToDateOpen, setGoToDateOpen] = useState(false);
   const [goToDateValue, setGoToDateValue] = useState('');
+  const [weekNotes, setWeekNotes] = useState<Map<number, note>>(new Map());
+  const [weekAnniversaries, setWeekAnniversaries] = useState<Map<number, RecurringAnniversary>>(new Map());
+
+  useEffect(() => {
+    getDatabase().catch(console.error);
+  }, []);
+
+  const fetchWeekData = useCallback(async () => {
+    const database = await getDatabase();
+    const notesArray = await database.notes.where('date').isBetween({
+      from: weekDates[0].valueOf(),
+      to: weekDates[6].valueOf(),
+    });
+    setWeekNotes(new Map(notesArray.map(n => [n.date, n])));
+
+    const anniversaryResults = await Promise.all(weekDates.map(d => getRecurringAnniversaryForDate(database, d)));
+    setWeekAnniversaries(new Map(anniversaryResults.map(a => [a.dayMonthKey, a])));
+  }, [weekDates]);
+
+  useEffect(() => {
+    fetchWeekData().catch(console.error);
+  }, [fetchWeekData]);
+
+  useEffect(() => {
+    return subscribeToImportCompletedSignal(() => {
+      fetchWeekData().catch(console.error);
+    });
+  }, [fetchWeekData]);
 
   const handleOpenGoToDate = () => {
     const d = weekDates[0];
@@ -184,6 +218,9 @@ const Week: React.FC = () => {
             <IconButton size="small" onClick={handleOpenGoToDate} aria-label="Go to date">
               <CalendarMonthIcon fontSize="small" />
             </IconButton>
+            <IconButton size="small" href="/search" aria-label="Search notes">
+              <SearchIcon fontSize="small" />
+            </IconButton>
           </Stack>
           <BottomNavigationAction
             label="Settings"
@@ -216,13 +253,48 @@ const Week: React.FC = () => {
       </Dialog>
       <Divider orientation="horizontal" variant="fullWidth" sx={{ width: '100%' }} />
       <Stack sx={{ alignItems: 'center', justifyContent: 'space-evenly', height: '100%' }}>
-        <DayRow key="monday" date={weekDates[0]} />
-        <DayRow key="tuesday" date={weekDates[1]} />
-        <DayRow key="wendesday" date={weekDates[2]} />
-        <DayRow key="thursday" date={weekDates[3]} />
-        <DayRow key="friday" date={weekDates[4]} />
-        <DayRow key="saturday" date={weekDates[5]} />
-        <DayRow key="sunday" date={weekDates[6]} />
+        <DayRow
+          key="monday"
+          date={weekDates[0]}
+          noteData={weekNotes.get(weekDates[0].valueOf())}
+          anniversaryData={weekAnniversaries.get(getDayMonthKeyFromDate(weekDates[0]))}
+        />
+        <DayRow
+          key="tuesday"
+          date={weekDates[1]}
+          noteData={weekNotes.get(weekDates[1].valueOf())}
+          anniversaryData={weekAnniversaries.get(getDayMonthKeyFromDate(weekDates[1]))}
+        />
+        <DayRow
+          key="wendesday"
+          date={weekDates[2]}
+          noteData={weekNotes.get(weekDates[2].valueOf())}
+          anniversaryData={weekAnniversaries.get(getDayMonthKeyFromDate(weekDates[2]))}
+        />
+        <DayRow
+          key="thursday"
+          date={weekDates[3]}
+          noteData={weekNotes.get(weekDates[3].valueOf())}
+          anniversaryData={weekAnniversaries.get(getDayMonthKeyFromDate(weekDates[3]))}
+        />
+        <DayRow
+          key="friday"
+          date={weekDates[4]}
+          noteData={weekNotes.get(weekDates[4].valueOf())}
+          anniversaryData={weekAnniversaries.get(getDayMonthKeyFromDate(weekDates[4]))}
+        />
+        <DayRow
+          key="saturday"
+          date={weekDates[5]}
+          noteData={weekNotes.get(weekDates[5].valueOf())}
+          anniversaryData={weekAnniversaries.get(getDayMonthKeyFromDate(weekDates[5]))}
+        />
+        <DayRow
+          key="sunday"
+          date={weekDates[6]}
+          noteData={weekNotes.get(weekDates[6].valueOf())}
+          anniversaryData={weekAnniversaries.get(getDayMonthKeyFromDate(weekDates[6]))}
+        />
       </Stack>
       <Divider orientation="horizontal" variant="fullWidth" sx={{ width: '100%' }} />
       <Paper sx={{ width: '100%', borderRadius: 0 }} elevation={0}>
