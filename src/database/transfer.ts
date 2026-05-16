@@ -131,6 +131,38 @@ function normalizeLegacyField(value: string | undefined): string {
   return value.trim().toLowerCase() === '(null)' ? '' : value;
 }
 
+function convertLegacyPhoto(photo: string): string {
+  if (photo.length === 0 || photo.startsWith('data:') || photo.startsWith('http://') || photo.startsWith('https://')) {
+    return photo;
+  }
+
+  // Legacy Objective-C iOS apps stored photos as raw base64-encoded binary image data.
+  // Detect the image format from the binary magic bytes and construct a proper data URI.
+  try {
+    const binaryStr = atob(photo);
+    const b = (i: number) => binaryStr.charCodeAt(i);
+
+    let mimeType: string;
+
+    if (b(0) === 0xff && b(1) === 0xd8 && b(2) === 0xff) {
+      mimeType = 'image/jpeg';
+    } else if (b(0) === 0x89 && b(1) === 0x50 && b(2) === 0x4e && b(3) === 0x47) {
+      mimeType = 'image/png';
+    } else if (b(0) === 0x42 && b(1) === 0x4d) {
+      mimeType = 'image/bmp';
+    } else if (b(0) === 0x47 && b(1) === 0x49 && b(2) === 0x46) {
+      mimeType = 'image/gif';
+    } else {
+      // Unknown format; default to JPEG as a best guess for iOS-sourced photos.
+      mimeType = 'image/jpeg';
+    }
+
+    return `data:${mimeType};base64,${photo}`;
+  } catch {
+    return photo;
+  }
+}
+
 function parseLegacyAnniversaryWithYear(value: string):
   | {
       text: string;
@@ -240,7 +272,7 @@ function parseLegacyXmlImportPayload(serializedPayload: string): DatabaseTransfe
 
     const date = parseLegacyDateToDayTimestamp(dateValue);
     const noteText = normalizeLegacyField(fields.get('note'));
-    const photo = normalizeLegacyField(fields.get('photo'));
+    const photo = convertLegacyPhoto(normalizeLegacyField(fields.get('photo')));
     const anniversaryText = normalizeLegacyField(fields.get('anniversary'));
 
     if (noteText.length > 0 || photo.length > 0) {
